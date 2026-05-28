@@ -142,14 +142,23 @@ export class SyncRouter {
         await this.syncFile(file);
     }
 
-    /** Sync every event/task note in scope. Returns the number processed. */
-    async syncAll(): Promise<number> {
-        let count = 0;
+    /**
+     * Sync every event/task note in scope. One failing note doesn't abort the rest — errors
+     * are isolated and counted so a single bad note or transient Google error is survivable.
+     */
+    async syncAll(): Promise<{ synced: number; failed: number }> {
+        let synced = 0;
+        let failed = 0;
         for (const file of this.app.vault.getMarkdownFiles()) {
             if (!this.syncKind(file.path)) continue;
-            await this.syncFile(file);
-            count++;
+            try {
+                await this.syncFile(file);
+                synced++;
+            } catch (e) {
+                failed++;
+                this.notify(`google-sync: ${file.name}: ${(e as Error).message}`);
+            }
         }
-        return count;
+        return { synced, failed };
     }
 }

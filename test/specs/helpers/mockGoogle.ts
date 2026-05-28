@@ -31,6 +31,8 @@ function install(): void {
             return Promise.resolve({ status: 204, headers, text: "", json: undefined });
         if (req.url.includes("/calendarList"))
             return ok({ items: [{ id: "primary", primary: true }] });
+        if (req.url.includes("/users/@me/lists"))
+            return ok({ items: [{ id: "@default", title: "My Tasks" }] });
         if (req.url.includes("oauth2.googleapis.com/token"))
             return ok({ access_token: "e2e", expires_in: 3600, refresh_token: "rt" });
         if (method === "POST") return ok({ id: `mock-${++seq}` });

@@ -222,14 +222,26 @@ export class GoogleAuth {
         const tokens = await this.store.load();
         if (!tokens) throw new Error("Not connected to Google");
         if (tokens.expiresAt - EXPIRY_SKEW_MS > this.now()) return tokens.accessToken;
-        if (!tokens.refreshToken) throw new Error("Access token expired and no refresh token");
-        const refreshed = await refreshAccessToken(
-            this.http,
-            this.config(),
-            tokens.refreshToken,
-            this.now,
-            this.retry,
-        );
+        if (!tokens.refreshToken) {
+            await this.store.save(null);
+            throw new Error("Google session expired — reconnect via Connect to Google.");
+        }
+        let refreshed: TokenSet;
+        try {
+            refreshed = await refreshAccessToken(
+                this.http,
+                this.config(),
+                tokens.refreshToken,
+                this.now,
+                this.retry,
+            );
+        } catch (e) {
+            // A revoked/expired refresh token won't recover — clear it and ask to reconnect.
+            await this.store.save(null);
+            throw new Error(
+                `Google session expired — reconnect via Connect to Google. (${(e as Error).message})`,
+            );
+        }
         await this.store.save(refreshed);
         return refreshed.accessToken;
     }

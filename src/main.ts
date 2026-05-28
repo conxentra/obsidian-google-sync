@@ -3,8 +3,8 @@ import { DEFAULT_SETTINGS, GoogleSyncSettings, GoogleSyncSettingTab } from "./se
 import { HttpFn } from "./google/http";
 import { obsidianHttp } from "./google/transport";
 import { DEFAULT_SCOPES, GoogleAuth, OAuthConfig, TokenSet, TokenStore } from "./google/auth";
-import { GoogleCalendarClient } from "./google/calendar";
-import { GoogleTasksClient } from "./google/tasks";
+import { CalendarListEntry, GoogleCalendarClient } from "./google/calendar";
+import { GoogleTasksClient, TaskListEntry } from "./google/tasks";
 import { SyncRouter } from "./sync/router";
 import { Lifecycle } from "./sync/lifecycle";
 import { registerCommands } from "./commands";
@@ -28,6 +28,7 @@ export default class GoogleSyncPlugin extends Plugin {
     private tokens: TokenSet | null = null;
     private auth!: GoogleAuth;
     private calendar!: GoogleCalendarClient;
+    private tasks!: GoogleTasksClient;
     private router!: SyncRouter;
     private lifecycle!: Lifecycle;
     private lastLifecycleRun = 0;
@@ -45,9 +46,9 @@ export default class GoogleSyncPlugin extends Plugin {
         this.auth = new GoogleAuth(http, () => this.oauthConfig(), this.tokenStore());
         const tokenProvider = () => this.auth.getAccessToken();
         this.calendar = new GoogleCalendarClient(http, tokenProvider);
-        const tasks = new GoogleTasksClient(http, tokenProvider);
-        this.router = new SyncRouter(this.app, this.calendar, tasks, () => this.settings);
-        this.lifecycle = new Lifecycle(this.app, tasks, () => this.settings);
+        this.tasks = new GoogleTasksClient(http, tokenProvider);
+        this.router = new SyncRouter(this.app, this.calendar, this.tasks, () => this.settings);
+        this.lifecycle = new Lifecycle(this.app, this.tasks, () => this.settings);
 
         this.addSettingTab(new GoogleSyncSettingTab(this.app, this));
         registerCommands(this);
@@ -132,6 +133,14 @@ export default class GoogleSyncPlugin extends Plugin {
         return this.auth.isConnected();
     }
 
+    listCalendars(): Promise<CalendarListEntry[]> {
+        return this.calendar.listCalendars();
+    }
+
+    listTaskLists(): Promise<TaskListEntry[]> {
+        return this.tasks.listTaskLists();
+    }
+
     async testConnection(): Promise<string> {
         try {
             await this.auth.getAccessToken();
@@ -148,8 +157,12 @@ export default class GoogleSyncPlugin extends Plugin {
             return;
         }
         try {
-            const n = await this.router.syncAll();
-            new Notice(`google-sync: synced ${n} note(s).`);
+            const { synced, failed } = await this.router.syncAll();
+            new Notice(
+                failed > 0
+                    ? `google-sync: synced ${synced}, ${failed} failed (see console).`
+                    : `google-sync: synced ${synced} note(s).`,
+            );
         } catch (e) {
             new Notice(`google-sync error: ${(e as Error).message}`);
         }

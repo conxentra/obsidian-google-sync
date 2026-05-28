@@ -165,6 +165,27 @@ describe("GoogleAuth", () => {
         expect(err).to.be.instanceOf(Error);
     });
 
+    it("clears tokens and asks to reconnect when refresh fails", async () => {
+        const mem = memStore({ accessToken: "old", expiresAt: 0, refreshToken: "revoked" });
+        const { fn } = fakeHttp([jsonResp(400, { error: "invalid_grant" })]);
+        const auth = new GoogleAuth(
+            fn,
+            () => config,
+            mem.store,
+            () => 1_000_000,
+            noWaitRetry,
+        );
+        let err: unknown;
+        try {
+            await auth.getAccessToken();
+        } catch (e) {
+            err = e;
+        }
+        expect(err).to.be.instanceOf(Error);
+        expect((err as Error).message).to.contain("reconnect");
+        expect(mem.get()).to.equal(null);
+    });
+
     it("completes auth and stores tokens on matching state", async () => {
         const mem = memStore(null);
         const { fn } = fakeHttp([

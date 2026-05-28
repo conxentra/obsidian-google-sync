@@ -1,5 +1,7 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import GoogleSyncPlugin from "./main";
+import { CalendarListEntry } from "./google/calendar";
+import { TaskListEntry } from "./google/tasks";
 
 export interface GoogleSyncSettings {
     // OAuth (BYO Google "Web application" client + self-hosted bridge redirect)
@@ -49,10 +51,52 @@ export const DEFAULT_SETTINGS: GoogleSyncSettings = {
 
 export class GoogleSyncSettingTab extends PluginSettingTab {
     plugin: GoogleSyncPlugin;
+    private calendars: CalendarListEntry[] = [];
+    private taskLists: TaskListEntry[] = [];
 
     constructor(app: App, plugin: GoogleSyncPlugin) {
         super(app, plugin);
         this.plugin = plugin;
+    }
+
+    /**
+     * Render a setting as a dropdown when options have been loaded from Google, otherwise a
+     * text field plus a "Load from Google" button (which fetches, then re-renders).
+     */
+    private picker(
+        name: string,
+        desc: string,
+        key: "defaultCalendarId" | "taskListId",
+        options: { id: string; label: string }[],
+        load: () => Promise<void>,
+    ): void {
+        const setting = new Setting(this.containerEl).setName(name).setDesc(desc);
+        if (options.length) {
+            setting.addDropdown((d) => {
+                for (const o of options) d.addOption(o.id, o.label);
+                d.setValue(this.plugin.settings[key]).onChange(async (v) => {
+                    this.plugin.settings[key] = v;
+                    await this.plugin.saveSettings();
+                });
+            });
+        } else {
+            setting.addText((t) =>
+                t.setValue(this.plugin.settings[key]).onChange(async (v) => {
+                    this.plugin.settings[key] = v;
+                    await this.plugin.saveSettings();
+                }),
+            );
+            setting.addButton((b) =>
+                b.setButtonText("Load from Google").onClick(async () => {
+                    try {
+                        await load();
+                        this.display();
+                    } catch (e) {
+                        new Notice(`google-sync: ${(e as Error).message}`);
+                    }
+                }),
+            );
+        }
     }
 
     private text(
@@ -136,12 +180,24 @@ export class GoogleSyncSettingTab extends PluginSettingTab {
 
         // --- Google targets ---
         new Setting(containerEl).setName("Google targets").setHeading();
-        this.text(
-            "Default calendar ID",
-            "Calendar to use (default: primary).",
+        this.picker(
+            "Default calendar",
+            "Calendar to sync events into.",
             "defaultCalendarId",
+            this.calendars.map((c) => ({ id: c.id, label: c.summary ?? c.id })),
+            async () => {
+                this.calendars = await this.plugin.listCalendars();
+            },
         );
-        this.text("Task list ID", "Google Tasks list ID to sync into.", "taskListId");
+        this.picker(
+            "Task list",
+            "Google Tasks list to sync into.",
+            "taskListId",
+            this.taskLists.map((t) => ({ id: t.id, label: t.title ?? t.id })),
+            async () => {
+                this.taskLists = await this.plugin.listTaskLists();
+            },
+        );
         this.text("Default timezone", "IANA timezone for notes without one.", "defaultTimezone");
 
         // --- Behavior ---
