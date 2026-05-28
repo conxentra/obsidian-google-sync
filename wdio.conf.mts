@@ -31,6 +31,7 @@ export const config: WebdriverIO.Config = {
     maxInstances: Number(env.WDIO_MAX_INSTANCES || 1),
 
     capabilities: [
+        // Desktop.
         ...desktopVersions.map<WebdriverIO.Capabilities>(([appVersion, installerVersion]) => ({
             browserName: "obsidian",
             "wdio:obsidianOptions": {
@@ -43,6 +44,26 @@ export const config: WebdriverIO.Config = {
                 args: headlessArgs,
             },
         })),
+        // Emulated mobile: real desktop Obsidian running the mobile UI with
+        // Platform.isMobile === true. This is the only automatable proxy for iOS/Android
+        // on a headless Linux box; final iOS validation is manual on a real device.
+        // Skip with E2E_MOBILE=0.
+        ...(env.E2E_MOBILE === "0"
+            ? []
+            : desktopVersions.map<WebdriverIO.Capabilities>(([appVersion, installerVersion]) => ({
+                  browserName: "obsidian",
+                  "wdio:obsidianOptions": {
+                      appVersion,
+                      installerVersion,
+                      emulateMobile: true,
+                      plugins: ["."],
+                      vault: "test/vaults/simple",
+                  },
+                  "goog:chromeOptions": {
+                      args: headlessArgs,
+                      mobileEmulation: { deviceMetrics: { width: 390, height: 844 } },
+                  },
+              }))),
     ],
 
     services: ["obsidian"],

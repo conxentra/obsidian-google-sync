@@ -5,5 +5,5 @@
     "minAppVersion": "1.6.2",
     "description": "Sync your vault's events and tasks folders to Google Calendar and Google Tasks.",
     "author": "Connor",
-    "isDesktopOnly": true
+    "isDesktopOnly": false
 }
