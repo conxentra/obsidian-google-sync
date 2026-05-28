@@ -1,16 +1,50 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import GoogleSyncPlugin from "./main";
 
 export interface GoogleSyncSettings {
-    /** Vault folder watched for calendar event notes. */
+    // OAuth (BYO Google "Web application" client + self-hosted bridge redirect)
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+    // Vault layout
     eventsFolder: string;
-    /** Vault folder watched for task notes. */
     tasksFolder: string;
+    // Google targets
+    defaultCalendarId: string;
+    taskListId: string;
+    defaultTimezone: string;
+    // Behavior
+    syncOnCreate: boolean;
+    syncOnModify: boolean;
+    syncOnDelete: boolean;
+    autoArchiveEnabled: boolean;
+    autoArchiveDaysPast: number;
+    autoCloseTasksOnArchive: boolean;
+}
+
+function systemTimezone(): string {
+    try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    } catch {
+        return "UTC";
+    }
 }
 
 export const DEFAULT_SETTINGS: GoogleSyncSettings = {
+    clientId: "",
+    clientSecret: "",
+    redirectUri: "",
     eventsFolder: "events",
     tasksFolder: "tasks",
+    defaultCalendarId: "primary",
+    taskListId: "",
+    defaultTimezone: systemTimezone(),
+    syncOnCreate: true,
+    syncOnModify: true,
+    syncOnDelete: true,
+    autoArchiveEnabled: true,
+    autoArchiveDaysPast: 1,
+    autoCloseTasksOnArchive: true,
 };
 
 export class GoogleSyncSettingTab extends PluginSettingTab {
@@ -21,28 +55,125 @@ export class GoogleSyncSettingTab extends PluginSettingTab {
         this.plugin = plugin;
     }
 
+    private text(
+        name: string,
+        desc: string,
+        key: keyof GoogleSyncSettings,
+        placeholder = "",
+    ): void {
+        new Setting(this.containerEl)
+            .setName(name)
+            .setDesc(desc)
+            .addText((t) =>
+                t
+                    .setPlaceholder(placeholder)
+                    .setValue(String(this.plugin.settings[key] ?? ""))
+                    .onChange(async (value) => {
+                        (this.plugin.settings[key] as unknown) = value;
+                        await this.plugin.saveSettings();
+                    }),
+            );
+    }
+
+    private toggle(name: string, desc: string, key: keyof GoogleSyncSettings): void {
+        new Setting(this.containerEl)
+            .setName(name)
+            .setDesc(desc)
+            .addToggle((t) =>
+                t.setValue(Boolean(this.plugin.settings[key])).onChange(async (value) => {
+                    (this.plugin.settings[key] as unknown) = value;
+                    await this.plugin.saveSettings();
+                }),
+            );
+    }
+
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
 
-        new Setting(containerEl)
-            .setName("Events folder")
-            .setDesc("Vault folder whose notes mirror to Google Calendar.")
-            .addText((text) =>
-                text.setValue(this.plugin.settings.eventsFolder).onChange(async (value) => {
-                    this.plugin.settings.eventsFolder = value;
-                    await this.plugin.saveSettings();
+        // --- Google account ---
+        new Setting(containerEl).setName("Google account").setHeading();
+
+        const status = new Setting(containerEl)
+            .setName("Connection")
+            .setDesc("Checking…")
+            .addButton((b) =>
+                b
+                    .setButtonText("Connect")
+                    .setCta()
+                    .onClick(() => void this.plugin.connect()),
+            )
+            .addButton((b) =>
+                b.setButtonText("Disconnect").onClick(async () => {
+                    await this.plugin.disconnect();
+                    this.display();
+                }),
+            )
+            .addButton((b) =>
+                b.setButtonText("Test connection").onClick(async () => {
+                    new Notice(await this.plugin.testConnection());
                 }),
             );
+        void this.plugin
+            .isConnected()
+            .then((c) => status.setDesc(c ? "Connected to Google." : "Not connected."));
 
+        // --- Google API credentials ---
+        new Setting(containerEl).setName("Google API credentials").setHeading();
+        this.text("OAuth client ID", "From your Google Cloud OAuth client.", "clientId");
+        this.text("OAuth client secret", "From your Google Cloud OAuth client.", "clientSecret");
+        this.text(
+            "Redirect bridge URL",
+            "Your hosted bridge page, also set as the redirect URI in Google Cloud.",
+            "redirectUri",
+            "https://your-bridge.example/callback",
+        );
+
+        // --- Vault layout ---
+        new Setting(containerEl).setName("Vault layout").setHeading();
+        this.text("Events folder", "Folder mirrored to Google Calendar.", "eventsFolder");
+        this.text("Tasks folder", "Folder mirrored to Google Tasks.", "tasksFolder");
+
+        // --- Google targets ---
+        new Setting(containerEl).setName("Google targets").setHeading();
+        this.text(
+            "Default calendar ID",
+            "Calendar to use (default: primary).",
+            "defaultCalendarId",
+        );
+        this.text("Task list ID", "Google Tasks list ID to sync into.", "taskListId");
+        this.text("Default timezone", "IANA timezone for notes without one.", "defaultTimezone");
+
+        // --- Behavior ---
+        new Setting(containerEl).setName("Behavior").setHeading();
+        this.toggle("Sync on create", "Push new notes to Google.", "syncOnCreate");
+        this.toggle("Sync on modify", "Push edits to Google.", "syncOnModify");
+        this.toggle(
+            "Sync on delete",
+            "Delete the Google item when a note is deleted.",
+            "syncOnDelete",
+        );
+        this.toggle(
+            "Auto-archive past events",
+            "Move past events to an archive folder daily.",
+            "autoArchiveEnabled",
+        );
+        this.toggle(
+            "Auto-close linked tasks on archive",
+            "Complete tasks listed in an event's `tasks` field when it archives.",
+            "autoCloseTasksOnArchive",
+        );
         new Setting(containerEl)
-            .setName("Tasks folder")
-            .setDesc("Vault folder whose notes mirror to Google Tasks.")
-            .addText((text) =>
-                text.setValue(this.plugin.settings.tasksFolder).onChange(async (value) => {
-                    this.plugin.settings.tasksFolder = value;
-                    await this.plugin.saveSettings();
-                }),
+            .setName("Archive after days past")
+            .setDesc("Days after an event's date before it is archived.")
+            .addText((t) =>
+                t
+                    .setValue(String(this.plugin.settings.autoArchiveDaysPast))
+                    .onChange(async (value) => {
+                        const n = Number(value);
+                        this.plugin.settings.autoArchiveDaysPast = Number.isFinite(n) ? n : 1;
+                        await this.plugin.saveSettings();
+                    }),
             );
     }
 }

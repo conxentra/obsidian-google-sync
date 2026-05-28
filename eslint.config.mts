@@ -26,7 +26,17 @@ export default defineConfig(
         rules: {
             "obsidianmd/ui/sentence-case": [
                 "error",
-                { brands: ["Google Calendar", "Google Tasks", "Google"] },
+                {
+                    brands: [
+                        "Obsidian",
+                        "Google Calendar",
+                        "Google Tasks",
+                        "Google Cloud",
+                        "Google",
+                        "OAuth",
+                    ],
+                    acronyms: ["ID", "URL", "API", "IANA", "UTC"],
+                },
             ],
         },
     },
