@@ -96,7 +96,7 @@ describe("Google import sync", () => {
             due: "2026-06-01T00:00:00.000Z",
             status: "completed",
             completed: "2026-06-01T03:04:05.000Z",
-        });
+        }, "L1");
 
         expect(fm).to.deep.equal({
             title: "Buy milk",
@@ -105,6 +105,7 @@ describe("Google import sync", () => {
             completed: true,
             status: "completed",
             googleId: "t1",
+            tasklist: "L1",
         });
     });
 });

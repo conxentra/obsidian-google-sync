@@ -75,13 +75,14 @@ export function remoteEventToNote(event: GoogleEvent, calendarId: string): Event
 }
 
 /** Map a Google Tasks item into task note frontmatter. Pure. */
-export function remoteTaskToNote(task: GoogleTask): TaskFrontmatter {
+export function remoteTaskToNote(task: GoogleTask, taskListId?: string): TaskFrontmatter {
     const fm: TaskFrontmatter = {
         title: task.title || "Untitled task",
         completed: task.status === "completed",
         status: task.status || "needsAction",
     };
     if (task.id) fm.googleId = task.id;
+    if (taskListId) fm.tasklist = taskListId;
     if (task.due) fm.due = task.due;
     if (task.notes != null) fm.notes = task.notes;
     return fm;

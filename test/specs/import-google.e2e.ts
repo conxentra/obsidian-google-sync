@@ -37,5 +37,6 @@ describe("Google import against mocked Google", function () {
         expect(result.event).to.contain("googleId: import-event-1");
         expect(result.task).to.contain("title: Imported task");
         expect(result.task).to.contain("googleId: import-task-1");
+        expect(result.task).to.contain("tasklist: L1");
     });
 });

@@ -90,15 +90,24 @@ export class GoogleImporter {
     }
 
     private async importTasks(counts: ImportCounts): Promise<void> {
-        const s = this.settings();
-        if (!s.taskListId) return;
-        const tasks = await this.tasks.listTasks(s.taskListId);
-        for (const task of tasks) await this.upsertTask(task, counts);
+        const taskListIds = await this.taskListIds();
+        for (const taskListId of taskListIds) {
+            const tasks = await this.tasks.listTasks(taskListId);
+            for (const task of tasks) await this.upsertTask(taskListId, task, counts);
+        }
     }
 
-    private async upsertTask(task: GoogleTask, counts: ImportCounts): Promise<void> {
+    private async taskListIds(): Promise<string[]> {
+        const s = this.settings();
+        const lists = await this.tasks.listTaskLists();
+        const ids = lists.map((l) => l.id).filter((id): id is string => !!id);
+        if (s.taskListId && !ids.includes(s.taskListId)) ids.unshift(s.taskListId);
+        return Array.from(new Set(ids));
+    }
+
+    private async upsertTask(taskListId: string, task: GoogleTask, counts: ImportCounts): Promise<void> {
         try {
-            const fm = remoteTaskToNote(task);
+            const fm = remoteTaskToNote(task, taskListId);
             const existing = await findByGoogleId(this.app, this.settings().tasksFolder, task.id);
             if (existing) await writeFrontmatter(this.app, existing, fm);
             else await upsertMarkdownFile(

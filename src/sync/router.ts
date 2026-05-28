@@ -49,7 +49,9 @@ export class SyncRouter {
             const googleId: unknown = fm?.googleId;
             if (typeof googleId !== "string" || !googleId) continue;
             const container =
-                kind === "event" ? (fm?.calendarId as string) || s.defaultCalendarId : s.taskListId;
+                kind === "event"
+                    ? (fm?.calendarId as string) || s.defaultCalendarId
+                    : (fm?.tasklist as string) || s.taskListId;
             this.index.set(file.path, { kind, googleId, container });
         }
     }
@@ -98,26 +100,27 @@ export class SyncRouter {
             return;
         }
         const s = this.settings();
-        if (!s.taskListId) {
+        const taskListId = v.value.tasklist || s.taskListId;
+        if (!taskListId) {
             this.notify("google-sync: set a task list ID in settings before syncing tasks.");
             return;
         }
         const body = taskToGoogle(v.value, s.defaultTimezone);
         if (v.value.googleId) {
-            await this.tasks.patchTask(s.taskListId, v.value.googleId, body);
+            await this.tasks.patchTask(taskListId, v.value.googleId, body);
             this.index.set(file.path, {
                 kind: "task",
                 googleId: v.value.googleId,
-                container: s.taskListId,
+                container: taskListId,
             });
         } else {
-            const created = await this.tasks.insertTask(s.taskListId, body);
+            const created = await this.tasks.insertTask(taskListId, body);
             if (created.id) {
                 await writeFrontmatterKey(this.app, file, "googleId", created.id);
                 this.index.set(file.path, {
                     kind: "task",
                     googleId: created.id,
-                    container: s.taskListId,
+                    container: taskListId,
                 });
             }
         }
