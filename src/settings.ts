@@ -161,9 +161,15 @@ export class GoogleSyncSettingTab extends PluginSettingTab {
         // --- Google account ---
         new Setting(containerEl).setName("Google account").setHeading();
 
-        const status = new Setting(containerEl)
+        // NOTE: setDesc must be computed SYNCHRONOUSLY here, not via an async
+        // .then() callback after display() returns. Mutating a Setting from a
+        // microtask after render — when the Setting has child controls — deadlocks
+        // Obsidian 1.12.x's renderer (100% CPU loop). isConnectedSync reads the
+        // in-memory token field directly so no await is needed.
+        const connected = this.plugin.isConnectedSync();
+        new Setting(containerEl)
             .setName("Connection")
-            .setDesc("Checking…")
+            .setDesc(connected ? "Connected to Google." : "Not connected.")
             .addButton((b) =>
                 b
                     .setButtonText("Connect")
@@ -181,9 +187,6 @@ export class GoogleSyncSettingTab extends PluginSettingTab {
                     new Notice(await this.plugin.testConnection());
                 }),
             );
-        void this.plugin
-            .isConnected()
-            .then((c) => status.setDesc(c ? "Connected to Google." : "Not connected."));
 
         // --- Google API credentials ---
         new Setting(containerEl).setName("Google API credentials").setHeading();

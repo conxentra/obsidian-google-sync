@@ -168,6 +168,18 @@ export default class GoogleSyncPlugin extends Plugin {
         return this.auth.isConnected();
     }
 
+    /**
+     * Sync variant of isConnected() — reads the in-memory token without awaiting. Use
+     * from the settings tab render so we don't have to mutate a Setting from a microtask
+     * (which deadlocks Obsidian's renderer in 1.12.x when the Setting has child controls).
+     */
+    isConnectedSync(): boolean {
+        return (
+            !!this.tokens?.refreshToken ||
+            (!!this.tokens && this.tokens.expiresAt > Date.now())
+        );
+    }
+
     listCalendars(): Promise<CalendarListEntry[]> {
         return this.calendar.listCalendars();
     }
