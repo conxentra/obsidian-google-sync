@@ -6,14 +6,18 @@ import { DEFAULT_SCOPES, GoogleAuth, OAuthConfig, TokenSet, TokenStore } from ".
 import { GoogleCalendarClient } from "./google/calendar";
 import { GoogleTasksClient } from "./google/tasks";
 import { SyncRouter } from "./sync/router";
+import { Lifecycle } from "./sync/lifecycle";
 import { registerCommands } from "./commands";
 
 interface PersistedData {
     settings: GoogleSyncSettings;
     tokens: TokenSet | null;
+    lastLifecycleRun?: number;
 }
 
 const DEBOUNCE_MS = 750;
+const LIFECYCLE_CHECK_MS = 60 * 60 * 1000; // hourly tick
+const LIFECYCLE_MIN_INTERVAL_MS = 23 * 60 * 60 * 1000; // ~daily
 
 /**
  * Google Calendar/Tasks sync. Obsidian -> Google, desktop + iOS. main.ts only wires
@@ -25,6 +29,8 @@ export default class GoogleSyncPlugin extends Plugin {
     private auth!: GoogleAuth;
     private calendar!: GoogleCalendarClient;
     private router!: SyncRouter;
+    private lifecycle!: Lifecycle;
+    private lastLifecycleRun = 0;
     private timers = new Map<string, number>();
 
     async onload(): Promise<void> {
@@ -41,6 +47,7 @@ export default class GoogleSyncPlugin extends Plugin {
         this.calendar = new GoogleCalendarClient(http, tokenProvider);
         const tasks = new GoogleTasksClient(http, tokenProvider);
         this.router = new SyncRouter(this.app, this.calendar, tasks, () => this.settings);
+        this.lifecycle = new Lifecycle(this.app, tasks, () => this.settings);
 
         this.addSettingTab(new GoogleSyncSettingTab(this.app, this));
         registerCommands(this);
@@ -49,7 +56,13 @@ export default class GoogleSyncPlugin extends Plugin {
             (params) => void this.onOAuthCallback(params),
         );
         this.registerVaultEvents();
-        this.app.workspace.onLayoutReady(() => this.router.buildIndex());
+        this.registerInterval(
+            window.setInterval(() => void this.maybeRunLifecycle(), LIFECYCLE_CHECK_MS),
+        );
+        this.app.workspace.onLayoutReady(() => {
+            this.router.buildIndex();
+            void this.maybeRunLifecycle();
+        });
     }
 
     onunload(): void {
@@ -63,10 +76,15 @@ export default class GoogleSyncPlugin extends Plugin {
         const data = (await this.loadData()) as Partial<PersistedData> | null;
         this.settings = { ...DEFAULT_SETTINGS, ...(data?.settings ?? {}) };
         this.tokens = data?.tokens ?? null;
+        this.lastLifecycleRun = data?.lastLifecycleRun ?? 0;
     }
 
     private async saveAll(): Promise<void> {
-        const data: PersistedData = { settings: this.settings, tokens: this.tokens };
+        const data: PersistedData = {
+            settings: this.settings,
+            tokens: this.tokens,
+            lastLifecycleRun: this.lastLifecycleRun,
+        };
         await this.saveData(data);
     }
 
@@ -135,6 +153,29 @@ export default class GoogleSyncPlugin extends Plugin {
         } catch (e) {
             new Notice(`google-sync error: ${(e as Error).message}`);
         }
+    }
+
+    /** Run the archive/overdue/completed scan. Notifies always when manual; else only if it did something. */
+    async runLifecycle(manual = false): Promise<void> {
+        try {
+            const c = await this.lifecycle.runOnce();
+            this.lastLifecycleRun = Date.now();
+            await this.saveAll();
+            const total = c.archived + c.overdue + c.completed;
+            if (manual || total > 0) {
+                new Notice(
+                    `google-sync lifecycle: ${c.archived} archived, ${c.overdue} overdue, ${c.completed} completed.`,
+                );
+            }
+        } catch (e) {
+            new Notice(`google-sync lifecycle error: ${(e as Error).message}`);
+        }
+    }
+
+    private async maybeRunLifecycle(): Promise<void> {
+        if (!this.settings.autoArchiveEnabled) return;
+        if (Date.now() - this.lastLifecycleRun < LIFECYCLE_MIN_INTERVAL_MS) return;
+        await this.runLifecycle(false);
     }
 
     /** Guarded e2e hook: seed a fake token so sync runs against the mock transport. */

@@ -19,6 +19,11 @@ export function registerCommands(plugin: GoogleSyncPlugin): void {
         callback: () => void plugin.syncNow(),
     });
     plugin.addCommand({
+        id: "run-lifecycle",
+        name: "Run lifecycle scan",
+        callback: () => void plugin.runLifecycle(true),
+    });
+    plugin.addCommand({
         id: "test-connection",
         name: "Test connection",
         callback: async () => {
