@@ -1,4 +1,4 @@
-import { App, TFile, normalizePath } from "obsidian";
+import { App, TAbstractFile, TFile, TFolder, normalizePath } from "obsidian";
 import { GoogleCalendarClient } from "../google/calendar";
 import { GoogleTasksClient } from "../google/tasks";
 import { GoogleSyncSettings } from "../settings";
@@ -67,12 +67,32 @@ async function findByGoogleId(
     googleId: string | undefined,
 ): Promise<TFile | null> {
     if (!googleId) return null;
-    for (const file of app.vault.getMarkdownFiles()) {
+    for (const file of scopedMarkdownFiles(app, folder)) {
         if (!normalizePath(file.path).startsWith(`${normalizePath(folder)}/`)) continue;
         const fm = await readFrontmatter(app, file);
         if (fm.googleId === googleId) return file;
     }
     return null;
+}
+
+function scopedMarkdownFiles(app: App, root: string): TFile[] {
+    const out: TFile[] = [];
+    const normalizedRoot = normalizePath(root).replace(/\/+$/, "");
+    const start = app.vault.getAbstractFileByPath(normalizedRoot);
+    if (!start) return out;
+
+    const visit = (node: TAbstractFile): void => {
+        if (node instanceof TFile) {
+            if (node.extension === "md") out.push(node);
+            return;
+        }
+        if (node instanceof TFolder) {
+            for (const child of node.children) visit(child);
+        }
+    };
+
+    visit(start);
+    return out;
 }
 
 export class GoogleImporter {

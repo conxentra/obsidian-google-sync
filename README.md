@@ -181,3 +181,4 @@ More developer and test notes:
 - [Development guide](https://github.com/Cordedmink2/obsidian-google-sync/blob/main/docs/development.md)
 - [Google setup guide](https://github.com/Cordedmink2/obsidian-google-sync/blob/main/docs/google-setup.md)
 - [iOS checklist](https://github.com/Cordedmink2/obsidian-google-sync/blob/main/docs/ios-checklist.md)
+- [Contributing](https://github.com/Cordedmink2/obsidian-google-sync/blob/main/CONTRIBUTING.md)

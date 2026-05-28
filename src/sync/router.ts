@@ -1,4 +1,4 @@
-import { App, Notice, TFile } from "obsidian";
+import { App, Notice, TAbstractFile, TFile, TFolder, normalizePath } from "obsidian";
 import { GoogleSyncSettings } from "../settings";
 import { GoogleCalendarClient } from "../google/calendar";
 import { GoogleTasksClient } from "../google/tasks";
@@ -42,7 +42,7 @@ export class SyncRouter {
     buildIndex(): void {
         this.index.clear();
         const s = this.settings();
-        for (const file of this.app.vault.getMarkdownFiles()) {
+        for (const file of scopedMarkdownFiles(this.app, [s.eventsFolder, s.tasksFolder])) {
             const kind = this.syncKind(file.path);
             if (!kind) continue;
             const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
@@ -152,7 +152,8 @@ export class SyncRouter {
     async syncAll(): Promise<{ synced: number; failed: number }> {
         let synced = 0;
         let failed = 0;
-        for (const file of this.app.vault.getMarkdownFiles()) {
+        const s = this.settings();
+        for (const file of scopedMarkdownFiles(this.app, [s.eventsFolder, s.tasksFolder])) {
             if (!this.syncKind(file.path)) continue;
             try {
                 await this.syncFile(file);
@@ -164,4 +165,31 @@ export class SyncRouter {
         }
         return { synced, failed };
     }
+}
+
+function scopedMarkdownFiles(app: App, roots: string[]): TFile[] {
+    const out: TFile[] = [];
+    const seen = new Set<string>();
+
+    const visit = (node: TAbstractFile): void => {
+        if (node instanceof TFile) {
+            if (node.extension === "md" && !seen.has(node.path)) {
+                seen.add(node.path);
+                out.push(node);
+            }
+            return;
+        }
+        if (node instanceof TFolder) {
+            for (const child of node.children) visit(child);
+        }
+    };
+
+    for (const root of roots) {
+        const normalized = normalizePath(root).replace(/\/+$/, "");
+        const node = app.vault.getAbstractFileByPath(normalized);
+        if (!node) continue;
+        visit(node);
+    }
+
+    return out;
 }
