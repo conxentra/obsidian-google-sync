@@ -37,7 +37,7 @@ export const DEFAULT_SETTINGS: GoogleSyncSettings = {
     eventsFolder: "events",
     tasksFolder: "tasks",
     defaultCalendarId: "primary",
-    taskListId: "",
+    taskListId: "@default",
     defaultTimezone: systemTimezone(),
     syncOnCreate: true,
     syncOnModify: true,

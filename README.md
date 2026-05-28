@@ -1,12 +1,36 @@
 # Google Calendar/Tasks Sync (Obsidian plugin)
 
-Bi-directional-ish sync that treats a vault's `events/` and `tasks/` folders as the
-source of truth and mirrors them to Google Calendar and Google Tasks. See the product
-spec at `../obsidian-google-sync-spec.md`.
+Treats a vault's `events/` and `tasks/` folders as the source of truth and mirrors them to
+**Google Calendar** and **Google Tasks** (Obsidian → Google). Works on **desktop and iOS**.
+See the product spec at `../obsidian-google-sync-spec.md`.
 
-> **Status:** project skeleton + dev/test toolchain only. Feature code (Google REST
-> client, OAuth, frontmatter parser, note↔Google mapper, file watcher, lifecycle) is the
-> next phase.
+## Features
+
+- **Events** (`events/*.md`): create / edit / delete a note → insert / patch / delete the
+  Google Calendar event. Handles timezones (IANA), all-day events, attendees, recurrence.
+- **Tasks** (`tasks/*.md`): create / edit / delete + completion → Google Tasks.
+- **Lifecycle** (daily): past events → `events/archive/` (and close linked tasks), overdue
+  tasks → `tasks/overdue/`, completed tasks → `tasks/completed/`.
+- **Mobile-safe**: all network via Obsidian `requestUrl` (no CORS issues, no Node deps); all
+  file I/O via the Vault API. OAuth is Authorization Code + PKCE via a self-hosted
+  `obsidian://` bridge, so the same flow works on iOS.
+- Exponential backoff on Google 429/5xx; `googleId` stored in frontmatter as the sync key.
+
+## Setup
+
+1. Create a Google OAuth client and host the redirect bridge — see
+   [docs/google-setup.md](docs/google-setup.md).
+2. Enter the client ID / secret / bridge URL in plugin settings, run **Connect to Google**.
+3. On iPhone, follow [docs/ios-checklist.md](docs/ios-checklist.md).
+
+Commands: **Connect to Google**, **Disconnect from Google**, **Sync now**,
+**Run lifecycle scan**, **Test connection**.
+
+## Note format
+
+Frontmatter drives the sync (`title`, `date`/`end`/`allDay`/`timezone`, `location`,
+`attendees`, `recurrence` for events; `title`, `due`, `completed`, `notes` for tasks).
+`googleId` is filled in automatically. Body content stays local to Obsidian.
 
 ## Toolchain
 

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Google Sync — returning to Obsidian</title>
+        <style>
+            body {
+                font-family: system-ui, sans-serif;
+                max-width: 32rem;
+                margin: 4rem auto;
+                padding: 0 1rem;
+                line-height: 1.5;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Returning to Obsidian…</h1>
+        <p id="msg">One moment.</p>
+        <!--
+            Static OAuth redirect bridge for the obsidian-google-sync plugin.
+            Deploy this page anywhere (GitHub Pages / Cloudflare Pages / Netlify) and register
+            its URL as the redirect URI of your Google "Web application" OAuth client AND in the
+            plugin's "Redirect bridge URL" setting. It only forwards the single-use code+state to
+            obsidian://google-sync; with PKCE it cannot exchange the code itself, so it is safe to
+            host statically and even share.
+        -->
+        <script>
+            (function () {
+                var p = new URLSearchParams(window.location.search);
+                var error = p.get("error");
+                var code = p.get("code");
+                var state = p.get("state");
+                var msg = document.getElementById("msg");
+                var target = null;
+                if (error) {
+                    target = "obsidian://google-sync?error=" + encodeURIComponent(error);
+                } else if (code && state) {
+                    target =
+                        "obsidian://google-sync?code=" +
+                        encodeURIComponent(code) +
+                        "&state=" +
+                        encodeURIComponent(state);
+                }
+                if (!target) {
+                    msg.textContent = "Missing authorization code. Please retry from Obsidian.";
+                    return;
+                }
+                window.location.href = target;
+                msg.textContent = "If Obsidian did not open automatically, ";
+                var link = document.createElement("a");
+                link.textContent = "tap here";
+                link.setAttribute("href", target);
+                msg.appendChild(link);
+                msg.appendChild(document.createTextNode("."));
+            })();
+        </script>
+    </body>
+</html>
