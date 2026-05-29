@@ -10,6 +10,7 @@ import { Lifecycle } from "./sync/lifecycle";
 import { GoogleImporter } from "./sync/importer";
 import { SyncSuppressor } from "./sync/suppression";
 import { registerCommands } from "./commands";
+import { readFrontmatter } from "./io";
 
 interface PersistedData {
     settings: GoogleSyncSettings;
@@ -461,9 +462,24 @@ export default class GoogleSyncPlugin extends Plugin {
         if (!(await this.auth.isConnected())) return;
         try {
             await this.router.syncFile(file);
+            await this.maybeFileCompletedTask(file);
         } catch (e) {
             new Notice(`google-sync: ${(e as Error).message}`);
         }
+    }
+
+    /**
+     * File a task into tasks/completed the moment it's marked done, rather than waiting for the
+     * ~daily lifecycle timer. Runs after a successful task sync (so Google is updated first).
+     * Gated on autoArchiveEnabled — the master auto-file switch — and skips notes already in a
+     * managed subfolder (syncKind returns null for those), so it never re-triggers on the move.
+     */
+    private async maybeFileCompletedTask(file: TFile): Promise<void> {
+        if (!this.settings.autoArchiveEnabled) return;
+        if (this.router.syncKind(file.path) !== "task") return;
+        const fm = await readFrontmatter(this.app, file);
+        if (fm.completed !== true && fm.status !== "completed") return;
+        await this.runLifecycle(false);
     }
 
     private async safeDelete(path: string): Promise<void> {

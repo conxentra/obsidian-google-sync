@@ -184,7 +184,7 @@ completed: false
 Optional task notes go here.
 ```
 
-Set `completed: true` and sync to mark the task completed in Google Tasks.
+Set `completed: true` and sync to mark the task completed in Google Tasks. With **Auto-archive past events** on, completing a task also files it into `tasks/completed/` straight away — you no longer have to wait for the periodic lifecycle scan.
 
 ## Linking tasks to events
 
