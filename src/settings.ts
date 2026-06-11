@@ -3,62 +3,10 @@ import GoogleSyncPlugin from "./main";
 import { CalendarListEntry } from "./google/calendar";
 import { TaskListEntry } from "./google/tasks";
 import { RecurringFilterMode } from "./sync/recurrence";
+import { DEFAULT_SETTINGS, GoogleSyncSettings } from "./settings-data";
 
-export interface GoogleSyncSettings {
-    // OAuth (BYO Google "Web application" client + self-hosted bridge redirect)
-    clientId: string;
-    clientSecret: string;
-    redirectUri: string;
-    // Vault layout
-    eventsFolder: string;
-    tasksFolder: string;
-    // Google targets
-    defaultCalendarId: string;
-    taskListId: string;
-    defaultTimezone: string;
-    // Behavior
-    syncOnModify: boolean;
-    importOnStartup: boolean;
-    importOnlyDefaultCalendar: boolean;
-    importOnlyDefaultTaskList: boolean;
-    importPastDays: number;
-    importFutureDays: number;
-    recurringEventFilterMode: RecurringFilterMode;
-    recurringEventFilters: string[];
-    autoArchiveEnabled: boolean;
-    autoArchiveDaysPast: number;
-    autoCloseTasksOnArchive: boolean;
-}
-
-function systemTimezone(): string {
-    try {
-        return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-    } catch {
-        return "UTC";
-    }
-}
-
-export const DEFAULT_SETTINGS: GoogleSyncSettings = {
-    clientId: "",
-    clientSecret: "",
-    redirectUri: "",
-    eventsFolder: "events",
-    tasksFolder: "tasks",
-    defaultCalendarId: "primary",
-    taskListId: "@default",
-    defaultTimezone: systemTimezone(),
-    syncOnModify: true,
-    importOnStartup: false,
-    importOnlyDefaultCalendar: true,
-    importOnlyDefaultTaskList: true,
-    importPastDays: 7,
-    importFutureDays: 90,
-    recurringEventFilterMode: "allow",
-    recurringEventFilters: [],
-    autoArchiveEnabled: true,
-    autoArchiveDaysPast: 1,
-    autoCloseTasksOnArchive: true,
-};
+export { DEFAULT_SETTINGS } from "./settings-data";
+export type { GoogleSyncSettings } from "./settings-data";
 
 export class GoogleSyncSettingTab extends PluginSettingTab {
     plugin: GoogleSyncPlugin;

@@ -1,9 +1,9 @@
-import { App, TAbstractFile, TFile, TFolder, normalizePath } from "obsidian";
 import { GoogleCalendarClient } from "../google/calendar";
 import { GoogleTasksClient } from "../google/tasks";
-import { GoogleSyncSettings } from "../settings";
+import { GoogleSyncSettings } from "../settings-data";
 import { GoogleEvent, GoogleTask } from "../types";
-import { readFrontmatter, upsertMarkdownFile, writeFrontmatter } from "../io";
+import { VaultPort } from "../vault/port";
+import { basenameOf, normalizeVaultPath } from "../vault/paths";
 import { mergeManagedFrontmatter, remoteEventToNote, remoteTaskToNote } from "./mapper";
 import { isEventAllowed } from "./recurrence";
 
@@ -35,75 +35,49 @@ function basePathFor(
 ): string {
     const titlePart = slugify(title || fallback, 50);
     const idPart = id ? slugify(id, 80) : "new";
-    return normalizePath(`${folder}/${titlePart}-${idPart}.md`);
+    return normalizeVaultPath(`${folder}/${titlePart}-${idPart}.md`);
 }
 
-/** The note name (no folder, no .md) for a vault path. */
-function basenameOf(path: string): string {
-    return (path.split("/").pop() ?? path).replace(/\.md$/i, "");
-}
-
-async function unusedPath(app: App, preferredPath: string): Promise<string> {
-    const normalized = normalizePath(preferredPath);
-    if (!app.vault.getAbstractFileByPath(normalized)) return normalized;
+async function unusedPath(port: VaultPort, preferredPath: string): Promise<string> {
+    const normalized = normalizeVaultPath(preferredPath);
+    if (!(await port.exists(normalized))) return normalized;
 
     const dot = normalized.lastIndexOf(".");
     const stem = dot === -1 ? normalized : normalized.slice(0, dot);
     const ext = dot === -1 ? "" : normalized.slice(dot);
     for (let i = 2; i < 1000; i++) {
         const candidate = `${stem}-${i}${ext}`;
-        if (!app.vault.getAbstractFileByPath(candidate)) return candidate;
+        if (!(await port.exists(candidate))) return candidate;
     }
     throw new Error(`Could not find an unused import path for ${normalized}`);
 }
 
 async function pathFor(
-    app: App,
+    port: VaultPort,
     folder: string,
     id: string | undefined,
     title: string | undefined,
     fallback: string,
 ): Promise<string> {
-    return unusedPath(app, basePathFor(folder, id, title, fallback));
+    return unusedPath(port, basePathFor(folder, id, title, fallback));
 }
 
 async function findByGoogleId(
-    app: App,
+    port: VaultPort,
     folder: string,
     googleId: string | undefined,
-): Promise<TFile | null> {
+): Promise<string | null> {
     if (!googleId) return null;
-    for (const file of scopedMarkdownFiles(app, folder)) {
-        if (!normalizePath(file.path).startsWith(`${normalizePath(folder)}/`)) continue;
-        const fm = await readFrontmatter(app, file);
-        if (fm.googleId === googleId) return file;
+    for (const ref of await port.listMarkdown([folder])) {
+        const fm = await port.readFrontmatter(ref.path);
+        if (fm.googleId === googleId) return ref.path;
     }
     return null;
 }
 
-function scopedMarkdownFiles(app: App, root: string): TFile[] {
-    const out: TFile[] = [];
-    const normalizedRoot = normalizePath(root).replace(/\/+$/, "");
-    const start = app.vault.getAbstractFileByPath(normalizedRoot);
-    if (!start) return out;
-
-    const visit = (node: TAbstractFile): void => {
-        if (node instanceof TFile) {
-            if (node.extension === "md") out.push(node);
-            return;
-        }
-        if (node instanceof TFolder) {
-            for (const child of node.children) visit(child);
-        }
-    };
-
-    visit(start);
-    return out;
-}
-
 export class GoogleImporter {
     constructor(
-        private readonly app: App,
+        private readonly port: VaultPort,
         private readonly calendar: GoogleCalendarClient,
         private readonly tasks: GoogleTasksClient,
         private readonly settings: () => GoogleSyncSettings,
@@ -171,25 +145,25 @@ export class GoogleImporter {
             const s = this.settings();
             if (!isEventAllowed(event, s.recurringEventFilterMode, s.recurringEventFilters)) return;
             const fm = remoteEventToNote(event, calendarId);
-            const existing = await findByGoogleId(this.app, s.eventsFolder, event.id);
+            const existing = await findByGoogleId(this.port, s.eventsFolder, event.id);
             if (existing) {
                 if (options.createOnly) return;
                 const merged = mergeManagedFrontmatter(
-                    await readFrontmatter(this.app, existing),
+                    await this.port.readFrontmatter(existing),
                     fm,
                     "event",
                 );
-                await writeFrontmatter(this.app, existing, merged);
-                this.onTouch(existing.path);
+                await this.port.writeFrontmatter(existing, merged);
+                this.onTouch(existing);
             } else {
                 const path = await pathFor(
-                    this.app,
+                    this.port,
                     s.eventsFolder,
                     event.id,
                     event.summary,
                     "event",
                 );
-                await upsertMarkdownFile(this.app, path, fm);
+                await this.port.upsertMarkdown(path, fm);
                 this.onTouch(path);
             }
             counts.events++;
@@ -239,27 +213,27 @@ export class GoogleImporter {
     ): Promise<string | undefined> {
         try {
             const fm = remoteTaskToNote(task, taskListId, parentBasename);
-            const existing = await findByGoogleId(this.app, this.settings().tasksFolder, task.id);
+            const existing = await findByGoogleId(this.port, this.settings().tasksFolder, task.id);
             if (existing) {
-                if (options.createOnly) return existing.basename;
+                if (options.createOnly) return basenameOf(existing);
                 const merged = mergeManagedFrontmatter(
-                    await readFrontmatter(this.app, existing),
+                    await this.port.readFrontmatter(existing),
                     fm,
                     "task",
                 );
-                await writeFrontmatter(this.app, existing, merged);
-                this.onTouch(existing.path);
+                await this.port.writeFrontmatter(existing, merged);
+                this.onTouch(existing);
                 counts.tasks++;
-                return existing.basename;
+                return basenameOf(existing);
             }
             const path = await pathFor(
-                this.app,
+                this.port,
                 this.settings().tasksFolder,
                 task.id,
                 task.title,
                 "task",
             );
-            await upsertMarkdownFile(this.app, path, fm);
+            await this.port.upsertMarkdown(path, fm);
             this.onTouch(path);
             counts.tasks++;
             return basenameOf(path);

@@ -10,7 +10,7 @@ import { Lifecycle } from "./sync/lifecycle";
 import { GoogleImporter } from "./sync/importer";
 import { SyncSuppressor } from "./sync/suppression";
 import { registerCommands } from "./commands";
-import { readFrontmatter } from "./io";
+import { ObsidianVaultPort } from "./vault/obsidian-port";
 
 interface PersistedData {
     settings: GoogleSyncSettings;
@@ -39,6 +39,7 @@ export default class GoogleSyncPlugin extends Plugin {
     private auth!: GoogleAuth;
     private calendar!: GoogleCalendarClient;
     private tasks!: GoogleTasksClient;
+    private port!: ObsidianVaultPort;
     private router!: SyncRouter;
     private lifecycle!: Lifecycle;
     private importer!: GoogleImporter;
@@ -63,19 +64,21 @@ export default class GoogleSyncPlugin extends Plugin {
         this.calendar = new GoogleCalendarClient(http, tokenProvider);
         this.tasks = new GoogleTasksClient(http, tokenProvider);
         const suppress = (path: string) => this.suppressor.suppress(path, Date.now());
+        const notice = (m: string) => {
+            new Notice(m);
+        };
+        this.port = new ObsidianVaultPort(this.app);
         this.router = new SyncRouter(
-            this.app,
+            this.port,
             this.calendar,
             this.tasks,
             () => this.settings,
-            (m) => {
-                new Notice(m);
-            },
+            notice,
             suppress,
         );
-        this.lifecycle = new Lifecycle(this.app, this.tasks, () => this.settings);
+        this.lifecycle = new Lifecycle(this.port, this.tasks, () => this.settings, notice);
         this.importer = new GoogleImporter(
-            this.app,
+            this.port,
             this.calendar,
             this.tasks,
             () => this.settings,
@@ -484,7 +487,7 @@ export default class GoogleSyncPlugin extends Plugin {
         if (!this.router.syncKind(file.path)) return;
         if (!(await this.auth.isConnected())) return;
         try {
-            await this.router.syncFile(file);
+            await this.router.syncPath(file.path);
             await this.maybeFileCompletedTask(file);
         } catch (e) {
             new Notice(`google-sync: ${(e as Error).message}`);
@@ -500,7 +503,7 @@ export default class GoogleSyncPlugin extends Plugin {
     private async maybeFileCompletedTask(file: TFile): Promise<void> {
         if (!this.settings.autoArchiveEnabled) return;
         if (this.router.syncKind(file.path) !== "task") return;
-        const fm = await readFrontmatter(this.app, file);
+        const fm = await this.port.readFrontmatter(file.path);
         if (fm.completed !== true && fm.status !== "completed") return;
         await this.runLifecycle(false);
     }
@@ -508,7 +511,7 @@ export default class GoogleSyncPlugin extends Plugin {
     private async safeRename(file: TFile): Promise<void> {
         if (!(await this.auth.isConnected())) return;
         try {
-            await this.router.syncFile(file);
+            await this.router.syncPath(file.path);
         } catch (e) {
             new Notice(`google-sync: ${(e as Error).message}`);
         }

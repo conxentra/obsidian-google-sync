@@ -1,32 +1,33 @@
-import { App, Notice, TAbstractFile, TFile, TFolder, normalizePath } from "obsidian";
-import { GoogleSyncSettings } from "../settings";
+import { GoogleSyncSettings } from "../settings-data";
 import { GoogleCalendarClient, WriteEventOptions } from "../google/calendar";
 import { GoogleTasksClient } from "../google/tasks";
 import { detectKind, isManagedSubpath, validateEvent, validateTask } from "./frontmatter";
 import { eventToGoogle, taskToGoogle } from "./mapper";
 import { linkToBasename } from "./lifecycle-plan";
-import { readFrontmatter, writeFrontmatterKey } from "../io";
+import { VaultPort } from "../vault/port";
 import { EventFrontmatter, GoogleEvent, NoteKind } from "../types";
 
 function isPullOnly(fm: Record<string, unknown>): boolean {
     return fm.syncDirection === "pull-only" || fm.googleSyncDirection === "pull-only";
 }
 
+function noteName(path: string): string {
+    return path.split("/").pop() ?? path;
+}
+
 /**
  * Pushes vault note edits to Google as updates (PATCH) — and nothing else. Sync is
  * one-way for existence: notes never create Google objects (only an import links a note
  * to an existing item via `googleId`) and never delete them. A note without a `googleId`
- * is simply local-only.
+ * is simply local-only. No `obsidian` import — runs in the plugin and headless.
  */
 export class SyncRouter {
     constructor(
-        private readonly app: App,
+        private readonly port: VaultPort,
         private readonly calendar: GoogleCalendarClient,
         private readonly tasks: GoogleTasksClient,
         private readonly settings: () => GoogleSyncSettings,
-        private readonly notify: (msg: string) => void = (m) => {
-            new Notice(m);
-        },
+        private readonly notify: (msg: string) => void = () => {},
         /** Called when the router writes a key back into a note (e.g. meetLink), so the
          * caller can suppress the resulting modify event from echoing back into sync. */
         private readonly onTouch: (path: string) => void = () => {},
@@ -39,19 +40,19 @@ export class SyncRouter {
         return detectKind(path, s.eventsFolder, s.tasksFolder);
     }
 
-    async syncFile(file: TFile): Promise<void> {
-        const kind = this.syncKind(file.path);
+    async syncPath(path: string): Promise<void> {
+        const kind = this.syncKind(path);
         if (!kind) return;
-        const fm = await readFrontmatter(this.app, file);
+        const fm = await this.port.readFrontmatter(path);
         if (isPullOnly(fm)) return;
-        if (kind === "event") await this.syncEvent(file, fm);
-        else await this.syncTask(file, fm);
+        if (kind === "event") await this.syncEvent(path, fm);
+        else await this.syncTask(path, fm);
     }
 
-    private async syncEvent(file: TFile, fm: Record<string, unknown>): Promise<void> {
+    private async syncEvent(path: string, fm: Record<string, unknown>): Promise<void> {
         const v = validateEvent(fm);
         if (!v.ok || !v.value) {
-            this.notify(`google-sync: ${file.name}: ${v.errors.join("; ")}`);
+            this.notify(`google-sync: ${noteName(path)}: ${v.errors.join("; ")}`);
             return;
         }
         // One-way: notes without a googleId stay local until an import links them.
@@ -61,7 +62,7 @@ export class SyncRouter {
         const body = eventToGoogle(v.value, s.defaultTimezone);
         const opts = this.eventWriteOptions(v.value, body);
         const patched = await this.calendar.patchEvent(calendarId, v.value.googleId, body, opts);
-        await this.writeMeetLinkBack(file, v.value, patched);
+        await this.writeMeetLinkBack(path, v.value, patched);
     }
 
     /**
@@ -91,7 +92,7 @@ export class SyncRouter {
 
     /** Persist a newly minted Meet link back into the note (managed, read-only). */
     private async writeMeetLinkBack(
-        file: TFile,
+        path: string,
         value: EventFrontmatter,
         result: GoogleEvent,
     ): Promise<void> {
@@ -99,14 +100,14 @@ export class SyncRouter {
             result.hangoutLink ??
             result.conferenceData?.entryPoints?.find((e) => e.entryPointType === "video")?.uri;
         if (!link || value.meetLink === link) return;
-        await writeFrontmatterKey(this.app, file, "meetLink", link);
-        this.onTouch(file.path);
+        await this.port.writeFrontmatterKey(path, "meetLink", link);
+        this.onTouch(path);
     }
 
-    private async syncTask(file: TFile, fm: Record<string, unknown>): Promise<void> {
+    private async syncTask(path: string, fm: Record<string, unknown>): Promise<void> {
         const v = validateTask(fm);
         if (!v.ok || !v.value) {
-            this.notify(`google-sync: ${file.name}: ${v.errors.join("; ")}`);
+            this.notify(`google-sync: ${noteName(path)}: ${v.errors.join("; ")}`);
             return;
         }
         // One-way: notes without a googleId stay local until an import links them.
@@ -118,7 +119,7 @@ export class SyncRouter {
             return;
         }
         const body = taskToGoogle(v.value, s.defaultTimezone);
-        const parentId = this.resolveParentGoogleId(v.value.parent, file.path);
+        const parentId = await this.resolveParentGoogleId(v.value.parent);
         await this.tasks.patchTask(taskListId, v.value.googleId, body);
         // parent can't be changed via patch — move handles (re)nesting.
         if (parentId) await this.tasks.moveTask(taskListId, v.value.googleId, { parent: parentId });
@@ -127,14 +128,19 @@ export class SyncRouter {
     /**
      * Resolve a task note's `parent` wikilink/basename to the parent task's Google id,
      * so it can be nested as a subtask. Returns undefined when there's no parent, the
-     * link doesn't resolve, or the parent isn't linked to Google yet (no googleId).
+     * link doesn't resolve to a task note, or the parent isn't linked to Google yet.
      */
-    private resolveParentGoogleId(parent: unknown, fromPath: string): string | undefined {
+    private async resolveParentGoogleId(parent: unknown): Promise<string | undefined> {
         if (typeof parent !== "string" || parent.trim() === "") return undefined;
-        const dest = this.app.metadataCache.getFirstLinkpathDest(linkToBasename(parent), fromPath);
-        if (!dest) return undefined;
-        const gid: unknown = this.app.metadataCache.getFileCache(dest)?.frontmatter?.googleId;
-        return typeof gid === "string" && gid ? gid : undefined;
+        const target = linkToBasename(parent);
+        if (!target) return undefined;
+        const s = this.settings();
+        for (const ref of await this.port.listMarkdown([s.tasksFolder])) {
+            if (ref.basename !== target) continue;
+            const gid: unknown = (await this.port.readFrontmatter(ref.path)).googleId;
+            if (typeof gid === "string" && gid) return gid;
+        }
+        return undefined;
     }
 
     /**
@@ -145,43 +151,16 @@ export class SyncRouter {
         let synced = 0;
         let failed = 0;
         const s = this.settings();
-        for (const file of scopedMarkdownFiles(this.app, [s.eventsFolder, s.tasksFolder])) {
-            if (!this.syncKind(file.path)) continue;
+        for (const ref of await this.port.listMarkdown([s.eventsFolder, s.tasksFolder])) {
+            if (!this.syncKind(ref.path)) continue;
             try {
-                await this.syncFile(file);
+                await this.syncPath(ref.path);
                 synced++;
             } catch (e) {
                 failed++;
-                this.notify(`google-sync: ${file.name}: ${(e as Error).message}`);
+                this.notify(`google-sync: ${noteName(ref.path)}: ${(e as Error).message}`);
             }
         }
         return { synced, failed };
     }
-}
-
-function scopedMarkdownFiles(app: App, roots: string[]): TFile[] {
-    const out: TFile[] = [];
-    const seen = new Set<string>();
-
-    const visit = (node: TAbstractFile): void => {
-        if (node instanceof TFile) {
-            if (node.extension === "md" && !seen.has(node.path)) {
-                seen.add(node.path);
-                out.push(node);
-            }
-            return;
-        }
-        if (node instanceof TFolder) {
-            for (const child of node.children) visit(child);
-        }
-    };
-
-    for (const root of roots) {
-        const normalized = normalizePath(root).replace(/\/+$/, "");
-        const node = app.vault.getAbstractFileByPath(normalized);
-        if (!node) continue;
-        visit(node);
-    }
-
-    return out;
 }
