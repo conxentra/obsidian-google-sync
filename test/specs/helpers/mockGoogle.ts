@@ -21,6 +21,19 @@ function install(): void {
     let seq = 0;
     w.__gsyncE2E = true;
     w.__gsyncCalls = calls;
+    // "Upcoming" fixtures are relative to now so they never age into the lifecycle's
+    // archive window; "past" fixtures use fixed long-past dates on purpose.
+    const futureIso = (days: number, plusHours = 0): string => {
+        const d = new Date();
+        d.setDate(d.getDate() + days);
+        d.setHours(9 + plusHours, 0, 0, 0);
+        return d.toISOString();
+    };
+    const futureDueIso = (days: number): string => {
+        const d = new Date();
+        d.setDate(d.getDate() + days);
+        return `${d.toISOString().slice(0, 10)}T00:00:00.000Z`;
+    };
     w.__gsyncHttp = (req: { url: string; method?: string; body?: string }) => {
         const method = req.method ?? "GET";
         calls.push({ method, url: req.url, body: req.body });
@@ -42,14 +55,8 @@ function install(): void {
                     {
                         id: "import-event-1",
                         summary: "Imported appointment",
-                        start: {
-                            dateTime: "2026-06-02T09:00:00+12:00",
-                            timeZone: "Pacific/Auckland",
-                        },
-                        end: {
-                            dateTime: "2026-06-02T10:00:00+12:00",
-                            timeZone: "Pacific/Auckland",
-                        },
+                        start: { dateTime: futureIso(5), timeZone: "Pacific/Auckland" },
+                        end: { dateTime: futureIso(5, 1), timeZone: "Pacific/Auckland" },
                     },
                     {
                         id: "past-import-event-1",
@@ -72,14 +79,8 @@ function install(): void {
                     {
                         id: "secondary-event-1",
                         summary: "Secondary appointment",
-                        start: {
-                            dateTime: "2026-06-03T09:00:00+12:00",
-                            timeZone: "Pacific/Auckland",
-                        },
-                        end: {
-                            dateTime: "2026-06-03T10:00:00+12:00",
-                            timeZone: "Pacific/Auckland",
-                        },
+                        start: { dateTime: futureIso(6), timeZone: "Pacific/Auckland" },
+                        end: { dateTime: futureIso(6, 1), timeZone: "Pacific/Auckland" },
                     },
                 ],
             });
@@ -96,7 +97,7 @@ function install(): void {
                     {
                         id: "default-import-task-1",
                         title: "Default list task",
-                        due: "2026-06-01T00:00:00.000Z",
+                        due: futureDueIso(10),
                         status: "needsAction",
                     },
                 ],
@@ -107,7 +108,7 @@ function install(): void {
                     {
                         id: "import-task-1",
                         title: "Imported task",
-                        due: "2026-06-01T00:00:00.000Z",
+                        due: futureDueIso(10),
                         status: "needsAction",
                     },
                     {

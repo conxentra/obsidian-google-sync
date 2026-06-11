@@ -1,9 +1,9 @@
 {
     "id": "google-sync",
     "name": "Google Calendar and Tasks Sync",
-    "version": "0.2.1",
+    "version": "0.3.0",
     "minAppVersion": "1.6.2",
-    "description": "Sync your vault's events and tasks folders to Google Calendar and Google Tasks.",
+    "description": "Keep your vault in sync with Google Calendar and Google Tasks: import events and tasks as notes, push edits back, never create or delete on the Google side.",
     "author": "Connor",
     "isDesktopOnly": false
 }

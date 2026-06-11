@@ -93,9 +93,11 @@ describe("Google import against mocked Google", function () {
                 if (old instanceof obsidian.TFile) await app.vault.delete(old);
             }
 
+            // Future-dated so the lifecycle doesn't archive it out from under the test.
+            const future = new Date(Date.now() + 5 * 24 * 3600_000).toISOString();
             await app.vault.create(
                 "events/imported-appointment-import-event-1.md",
-                "---\ntitle: Local note using same filename\ndate: 2026-06-02T09:00:00+12:00\n---\nDo not overwrite me.",
+                `---\ntitle: Local note using same filename\ndate: ${future}\n---\nDo not overwrite me.`,
             );
 
             await plugin.importFromGoogle();
