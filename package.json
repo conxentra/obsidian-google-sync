@@ -7,6 +7,7 @@
         "dev": "node esbuild.config.mjs",
         "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
         "build-dev": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs development",
+        "build:headless": "tsc -noEmit -skipLibCheck && node esbuild.headless.mjs",
         "version": "node version-bump.mjs && git add manifest.json versions.json",
         "lint": "eslint .",
         "format": "prettier --write .",
@@ -52,7 +53,8 @@
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.59.3",
         "wdio-obsidian-reporter": "^3.0.3",
-        "wdio-obsidian-service": "^3.0.3"
+        "wdio-obsidian-service": "^3.0.3",
+        "yaml": "^2.9.0"
     },
     "dependencies": {
         "luxon": "^3.7.2"

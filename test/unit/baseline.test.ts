@@ -25,6 +25,26 @@ describe("diffBody", () => {
         expect(patch).to.deep.equal({ location: null });
     });
 
+    it("treats the same instant in different representations as unchanged", () => {
+        const baseline = {
+            summary: "X",
+            start: { dateTime: "2026-06-11T00:38:00.000Z" },
+            end: { dateTime: "2026-06-11T01:38:00.000Z" },
+        };
+        const current = {
+            summary: "X",
+            start: { dateTime: "2026-06-11T12:38:00+12:00", timeZone: "Pacific/Auckland" },
+            end: { dateTime: "2026-06-11T13:38:00+12:00", timeZone: "Pacific/Auckland" },
+        };
+        expect(diffBody(baseline, current)).to.equal(null);
+
+        const moved = {
+            ...current,
+            start: { dateTime: "2026-06-11T14:00:00+12:00", timeZone: "Pacific/Auckland" },
+        };
+        expect(Object.keys(diffBody(baseline, moved) ?? {})).to.deep.equal(["start"]);
+    });
+
     it("does not touch fields the note never knew about (remote-only edits survive)", () => {
         const patch = diffBody(
             { summary: "X" }, // baseline from import: no description back then

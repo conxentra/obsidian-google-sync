@@ -1,4 +1,5 @@
-import { NoteKind } from "../types";
+import { DateTime } from "luxon";
+import { GoogleEventDateTime, NoteKind } from "../types";
 
 /**
  * Baseline-diff patching: the structural guard against mass calendar corruption.
@@ -70,6 +71,25 @@ function sameValue(a: unknown, b: unknown): boolean {
 }
 
 /**
+ * start/end compare by meaning, not representation: Google returns instants like
+ * "...T00:38:00.000Z" while the mapper emits zone-offset strings — the same moment must
+ * not register as a change (a big import would otherwise queue a pointless patch per
+ * timed event and eat the mass-update budget).
+ */
+function sameEventTime(a: unknown, b: unknown): boolean {
+    if (!a || !b || typeof a !== "object" || typeof b !== "object") return sameValue(a, b);
+    const x = a as GoogleEventDateTime;
+    const y = b as GoogleEventDateTime;
+    if (x.date || y.date) return x.date === y.date;
+    if (x.dateTime && y.dateTime) {
+        const dx = DateTime.fromISO(x.dateTime, { setZone: true });
+        const dy = DateTime.fromISO(y.dateTime, { setZone: true });
+        if (dx.isValid && dy.isValid) return dx.toMillis() === dy.toMillis();
+    }
+    return sameValue(a, b);
+}
+
+/**
  * Fields to PATCH so the remote matches `current`, given the last-known `baseline`.
  * Keys present in the baseline but gone from `current` map to null (Google clears them).
  * Returns null when nothing changed. `start`/`end` are never emitted as null — a note
@@ -79,7 +99,9 @@ export function diffBody(baseline: GoogleBody, current: GoogleBody): GoogleBody 
     const patch: GoogleBody = {};
     for (const [k, v] of Object.entries(current)) {
         if (v === undefined) continue;
-        if (!sameValue(baseline[k], v)) patch[k] = v;
+        const same =
+            k === "start" || k === "end" ? sameEventTime(baseline[k], v) : sameValue(baseline[k], v);
+        if (!same) patch[k] = v;
     }
     for (const k of Object.keys(baseline)) {
         if (baseline[k] === undefined || current[k] !== undefined) continue;
