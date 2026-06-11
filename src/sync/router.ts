@@ -4,6 +4,7 @@ import { GoogleTasksClient } from "../google/tasks";
 import { detectKind, isManagedSubpath, validateEvent, validateTask } from "./frontmatter";
 import { eventToGoogle, taskToGoogle } from "./mapper";
 import { linkToBasename } from "./lifecycle-plan";
+import { BaselineStore, GoogleBody, diffBody, projectRemoteBody, vetPatch } from "./baseline";
 import { VaultPort } from "../vault/port";
 import { EventFrontmatter, GoogleEvent, NoteKind } from "../types";
 
@@ -15,22 +16,60 @@ function noteName(path: string): string {
     return path.split("/").pop() ?? path;
 }
 
+/** A vetted, ready-to-send update for one note. */
+export interface PlannedPatch {
+    path: string;
+    kind: NoteKind;
+    /** calendarId for events, taskListId for tasks. */
+    container: string;
+    googleId: string;
+    /** Only the changed fields (cleared fields are null). */
+    patch: GoogleBody;
+    /** The full mapped body — becomes the new baseline after a successful push. */
+    body: GoogleBody;
+    event?: EventFrontmatter;
+}
+
+export interface PendingChange {
+    path: string;
+    changedKeys: string[];
+    veto?: string;
+}
+
+export interface SyncRunResult {
+    synced: number;
+    failed: number;
+    /** Paths held back by the mass-update guard (run again confirmed to push them). */
+    blocked: string[];
+}
+
+/** Rolling window for the per-note (debounced edit) mass-update guard. */
+const PATCH_WINDOW_MS = 60_000;
+
 /**
- * Pushes vault note edits to Google as updates (PATCH) — and nothing else. Sync is
- * one-way for existence: notes never create Google objects (only an import links a note
- * to an existing item via `googleId`) and never delete them. A note without a `googleId`
- * is simply local-only. No `obsidian` import — runs in the plugin and headless.
+ * Pushes vault note edits to Google as minimal updates — and nothing else. Sync is
+ * one-way for existence (no creates, no deletes; a note without `googleId` is local-only)
+ * and diff-based for content: each note's last-pushed/imported body is kept as a baseline,
+ * only fields that changed against it are PATCHed, and a note with no baseline is diffed
+ * against a fresh GET of the remote item. Patches that look like template clobbers
+ * (placeholder title, mass field clearing) are vetoed, and more than `maxPatchesPerRun`
+ * pending updates trip a circuit breaker that requires explicit confirmation.
+ * No `obsidian` import — runs in the plugin and headless.
  */
 export class SyncRouter {
+    private recentPatches: number[] = [];
+
     constructor(
         private readonly port: VaultPort,
         private readonly calendar: GoogleCalendarClient,
         private readonly tasks: GoogleTasksClient,
         private readonly settings: () => GoogleSyncSettings,
+        private readonly baselines: BaselineStore,
         private readonly notify: (msg: string) => void = () => {},
         /** Called when the router writes a key back into a note (e.g. meetLink), so the
          * caller can suppress the resulting modify event from echoing back into sync. */
         private readonly onTouch: (path: string) => void = () => {},
+        private readonly now: () => number = Date.now,
     ) {}
 
     /** The note kind to sync for this path, or null if it should be ignored. */
@@ -40,29 +79,219 @@ export class SyncRouter {
         return detectKind(path, s.eventsFolder, s.tasksFolder);
     }
 
+    /** Sync a single note (debounced vault-edit path), guarded by a rolling-window breaker. */
     async syncPath(path: string): Promise<void> {
-        const kind = this.syncKind(path);
-        if (!kind) return;
-        const fm = await this.port.readFrontmatter(path);
-        if (isPullOnly(fm)) return;
-        if (kind === "event") await this.syncEvent(path, fm);
-        else await this.syncTask(path, fm);
+        const plan = await this.planPath(path);
+        if (!plan) return;
+        const max = this.maxPatchesPerRun();
+        const cutoff = this.now() - PATCH_WINDOW_MS;
+        this.recentPatches = this.recentPatches.filter((t) => t > cutoff);
+        if (this.recentPatches.length >= max) {
+            this.notify(
+                `google-sync: mass-update guard — ${this.recentPatches.length} updates in the last minute; skipped ${noteName(path)}. Run "Push pending updates (confirmed)" to push everything.`,
+            );
+            return;
+        }
+        await this.apply(plan);
+        this.recentPatches.push(this.now());
     }
 
-    private async syncEvent(path: string, fm: Record<string, unknown>): Promise<void> {
+    /**
+     * Push every pending change in scope. When more than maxPatchesPerRun notes have
+     * pending updates and `confirmed` is not set, nothing is sent — the run reports the
+     * blocked paths instead, so a runaway template/script can't fan out across Google.
+     */
+    async syncAll(options: { confirmed?: boolean } = {}): Promise<SyncRunResult> {
+        const result: SyncRunResult = { synced: 0, failed: 0, blocked: [] };
+        const plans: PlannedPatch[] = [];
+        for (const ref of await this.port.listMarkdown(this.scopeRoots())) {
+            if (!this.syncKind(ref.path)) continue;
+            try {
+                const plan = await this.planPath(ref.path);
+                if (plan) plans.push(plan);
+            } catch (e) {
+                result.failed++;
+                this.notify(`google-sync: ${noteName(ref.path)}: ${(e as Error).message}`);
+            }
+        }
+        if (!options.confirmed && plans.length > this.maxPatchesPerRun()) {
+            result.blocked = plans.map((p) => p.path);
+            this.notify(
+                `google-sync: mass-update guard — ${plans.length} notes have pending updates (limit ${this.maxPatchesPerRun()}). Nothing was sent. Run "Push pending updates (confirmed)" if this is intentional.`,
+            );
+            return result;
+        }
+        for (const plan of plans) {
+            try {
+                await this.apply(plan);
+                result.synced++;
+            } catch (e) {
+                result.failed++;
+                this.notify(`google-sync: ${noteName(plan.path)}: ${(e as Error).message}`);
+            }
+        }
+        return result;
+    }
+
+    /** Dry run: what would be pushed, per note, without calling Google's write endpoints. */
+    async previewAll(): Promise<PendingChange[]> {
+        const out: PendingChange[] = [];
+        for (const ref of await this.port.listMarkdown(this.scopeRoots())) {
+            if (!this.syncKind(ref.path)) continue;
+            try {
+                const plan = await this.planPath(ref.path, { collectVetoed: out });
+                if (plan) out.push({ path: plan.path, changedKeys: Object.keys(plan.patch) });
+            } catch (e) {
+                out.push({ path: ref.path, changedKeys: [], veto: (e as Error).message });
+            }
+        }
+        return out;
+    }
+
+    private scopeRoots(): string[] {
+        const s = this.settings();
+        return [s.eventsFolder, s.tasksFolder];
+    }
+
+    private maxPatchesPerRun(): number {
+        const n = this.settings().maxPatchesPerRun;
+        return Number.isFinite(n) && n > 0 ? n : 10;
+    }
+
+    /**
+     * Compute the pending update for a note, or null when there is nothing to send:
+     * out of scope, pull-only, not linked to Google, invalid, unchanged, or vetoed.
+     */
+    private async planPath(
+        path: string,
+        options: { collectVetoed?: PendingChange[] } = {},
+    ): Promise<PlannedPatch | null> {
+        const kind = this.syncKind(path);
+        if (!kind) return null;
+        const fm = await this.port.readFrontmatter(path);
+        if (isPullOnly(fm)) return null;
+        const plan = kind === "event" ? await this.planEvent(path, fm) : await this.planTask(path, fm);
+        if (!plan) return null;
+        const baseline = (await this.baselines.get(path)) ?? (await this.fetchRemoteBaseline(plan));
+        const patch = diffBody(baseline, plan.body);
+        if (!patch) {
+            // Up to date — but an unfulfilled Meet request still needs an (empty) patch
+            // carrying the conferenceData create request.
+            const wantsMeet =
+                plan.event &&
+                (plan.event.conferencing === true || plan.event.conferencing === "hangoutsMeet") &&
+                !plan.event.meetLink;
+            if (wantsMeet) return plan;
+            // Refresh the baseline so later diffs start from here.
+            await this.baselines.set(path, plan.body);
+            return null;
+        }
+        const veto = vetPatch(patch, baseline, kind);
+        if (!veto.ok) {
+            const msg = `google-sync: ${noteName(path)}: ${veto.reason} — not pushed. Re-import to restore the note from Google.`;
+            options.collectVetoed?.push({ path, changedKeys: Object.keys(patch), veto: veto.reason });
+            this.notify(msg);
+            return null;
+        }
+        return { ...plan, patch };
+    }
+
+    /** First contact for a note with no stored baseline: diff against the live remote item. */
+    private async fetchRemoteBaseline(plan: PlannedPatch): Promise<GoogleBody> {
+        const remote =
+            plan.kind === "event"
+                ? await this.calendar.getEvent(plan.container, plan.googleId)
+                : await this.tasks.getTask(plan.container, plan.googleId);
+        return projectRemoteBody(remote as GoogleBody, plan.kind);
+    }
+
+    private async planEvent(
+        path: string,
+        fm: Record<string, unknown>,
+    ): Promise<PlannedPatch | null> {
         const v = validateEvent(fm);
         if (!v.ok || !v.value) {
             this.notify(`google-sync: ${noteName(path)}: ${v.errors.join("; ")}`);
-            return;
+            return null;
         }
         // One-way: notes without a googleId stay local until an import links them.
-        if (!v.value.googleId) return;
+        if (!v.value.googleId) return null;
         const s = this.settings();
-        const calendarId = v.value.calendarId || s.defaultCalendarId;
-        const body = eventToGoogle(v.value, s.defaultTimezone);
-        const opts = this.eventWriteOptions(v.value, body);
-        const patched = await this.calendar.patchEvent(calendarId, v.value.googleId, body, opts);
-        await this.writeMeetLinkBack(path, v.value, patched);
+        const body = eventToGoogle(v.value, s.defaultTimezone) as GoogleBody;
+        return {
+            path,
+            kind: "event",
+            container: v.value.calendarId || s.defaultCalendarId,
+            googleId: v.value.googleId,
+            patch: {},
+            body,
+            event: v.value,
+        };
+    }
+
+    private async planTask(
+        path: string,
+        fm: Record<string, unknown>,
+    ): Promise<PlannedPatch | null> {
+        const v = validateTask(fm);
+        if (!v.ok || !v.value) {
+            this.notify(`google-sync: ${noteName(path)}: ${v.errors.join("; ")}`);
+            return null;
+        }
+        // One-way: notes without a googleId stay local until an import links them.
+        if (!v.value.googleId) return null;
+        const s = this.settings();
+        const taskListId = v.value.tasklist || s.taskListId;
+        if (!taskListId) {
+            this.notify("google-sync: set a task list ID in settings before syncing tasks.");
+            return null;
+        }
+        const body = taskToGoogle(v.value, s.defaultTimezone) as GoogleBody;
+        // `parent` participates in the diff (so re-nesting is detected) but is sent via
+        // the move endpoint, not the PATCH body — see apply().
+        const parentId = await this.resolveParentGoogleId(v.value.parent);
+        if (parentId) body.parent = parentId;
+        return {
+            path,
+            kind: "task",
+            container: taskListId,
+            googleId: v.value.googleId,
+            patch: {},
+            body,
+        };
+    }
+
+    private async apply(plan: PlannedPatch): Promise<void> {
+        if (plan.kind === "event") await this.applyEvent(plan);
+        else await this.applyTask(plan);
+        await this.baselines.set(plan.path, plan.body);
+    }
+
+    private async applyEvent(plan: PlannedPatch): Promise<void> {
+        const value = plan.event as EventFrontmatter;
+        const patch = { ...plan.patch } as GoogleEvent;
+        const opts = this.eventWriteOptions(value, patch);
+        const patched = await this.calendar.patchEvent(plan.container, plan.googleId, patch, opts);
+        await this.writeMeetLinkBack(plan.path, value, patched);
+    }
+
+    private async applyTask(plan: PlannedPatch): Promise<void> {
+        const patch = { ...plan.patch };
+        const parentChanged = "parent" in patch;
+        const parentId = patch.parent;
+        delete patch.parent;
+        if (Object.keys(patch).length) {
+            await this.tasks.patchTask(plan.container, plan.googleId, patch);
+        }
+        // parent can't be changed via patch — move handles (re)nesting; a cleared
+        // parent (null) promotes the task back to top level.
+        if (parentChanged) {
+            await this.tasks.moveTask(
+                plan.container,
+                plan.googleId,
+                typeof parentId === "string" && parentId ? { parent: parentId } : {},
+            );
+        }
     }
 
     /**
@@ -104,27 +333,6 @@ export class SyncRouter {
         this.onTouch(path);
     }
 
-    private async syncTask(path: string, fm: Record<string, unknown>): Promise<void> {
-        const v = validateTask(fm);
-        if (!v.ok || !v.value) {
-            this.notify(`google-sync: ${noteName(path)}: ${v.errors.join("; ")}`);
-            return;
-        }
-        // One-way: notes without a googleId stay local until an import links them.
-        if (!v.value.googleId) return;
-        const s = this.settings();
-        const taskListId = v.value.tasklist || s.taskListId;
-        if (!taskListId) {
-            this.notify("google-sync: set a task list ID in settings before syncing tasks.");
-            return;
-        }
-        const body = taskToGoogle(v.value, s.defaultTimezone);
-        const parentId = await this.resolveParentGoogleId(v.value.parent);
-        await this.tasks.patchTask(taskListId, v.value.googleId, body);
-        // parent can't be changed via patch — move handles (re)nesting.
-        if (parentId) await this.tasks.moveTask(taskListId, v.value.googleId, { parent: parentId });
-    }
-
     /**
      * Resolve a task note's `parent` wikilink/basename to the parent task's Google id,
      * so it can be nested as a subtask. Returns undefined when there's no parent, the
@@ -141,26 +349,5 @@ export class SyncRouter {
             if (typeof gid === "string" && gid) return gid;
         }
         return undefined;
-    }
-
-    /**
-     * Sync every event/task note in scope. One failing note doesn't abort the rest — errors
-     * are isolated and counted so a single bad note or transient Google error is survivable.
-     */
-    async syncAll(): Promise<{ synced: number; failed: number }> {
-        let synced = 0;
-        let failed = 0;
-        const s = this.settings();
-        for (const ref of await this.port.listMarkdown([s.eventsFolder, s.tasksFolder])) {
-            if (!this.syncKind(ref.path)) continue;
-            try {
-                await this.syncPath(ref.path);
-                synced++;
-            } catch (e) {
-                failed++;
-                this.notify(`google-sync: ${noteName(ref.path)}: ${(e as Error).message}`);
-            }
-        }
-        return { synced, failed };
     }
 }

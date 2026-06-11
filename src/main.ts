@@ -9,6 +9,7 @@ import { SyncRouter } from "./sync/router";
 import { Lifecycle } from "./sync/lifecycle";
 import { GoogleImporter } from "./sync/importer";
 import { SyncSuppressor } from "./sync/suppression";
+import { BaselineStore, GoogleBody } from "./sync/baseline";
 import { registerCommands } from "./commands";
 import { ObsidianVaultPort } from "./vault/obsidian-port";
 
@@ -16,6 +17,8 @@ interface PersistedData {
     settings: GoogleSyncSettings;
     tokens: TokenSet | null;
     lastLifecycleRun?: number;
+    /** Per-note last-pushed/imported Google bodies (the diff-patching baselines). */
+    baselines?: Record<string, GoogleBody>;
 }
 
 const DEBOUNCE_MS = 750;
@@ -44,6 +47,7 @@ export default class GoogleSyncPlugin extends Plugin {
     private lifecycle!: Lifecycle;
     private importer!: GoogleImporter;
     private lastLifecycleRun = 0;
+    private baselines: Record<string, GoogleBody> = {};
     private suppressor = new SyncSuppressor(SYNC_SUPPRESS_MS);
     private timers = new Map<string, number>();
     private settingsSaveTimer: number | null = null;
@@ -68,11 +72,13 @@ export default class GoogleSyncPlugin extends Plugin {
             new Notice(m);
         };
         this.port = new ObsidianVaultPort(this.app);
+        const baselines = this.baselineStore();
         this.router = new SyncRouter(
             this.port,
             this.calendar,
             this.tasks,
             () => this.settings,
+            baselines,
             notice,
             suppress,
         );
@@ -83,6 +89,7 @@ export default class GoogleSyncPlugin extends Plugin {
             this.tasks,
             () => this.settings,
             suppress,
+            baselines,
         );
 
         this.addSettingTab(new GoogleSyncSettingTab(this.app, this));
@@ -126,6 +133,7 @@ export default class GoogleSyncPlugin extends Plugin {
         this.settings = { ...DEFAULT_SETTINGS, ...(data?.settings ?? {}) };
         this.tokens = data?.tokens ?? null;
         this.lastLifecycleRun = data?.lastLifecycleRun ?? 0;
+        this.baselines = data?.baselines ?? {};
     }
 
     private async saveAll(): Promise<void> {
@@ -133,8 +141,20 @@ export default class GoogleSyncPlugin extends Plugin {
             settings: this.settings,
             tokens: this.tokens,
             lastLifecycleRun: this.lastLifecycleRun,
+            baselines: this.baselines,
         };
         await this.saveData(data);
+    }
+
+    /** Baselines live in data.json; writes are debounced through the settings-save timer. */
+    private baselineStore(): BaselineStore {
+        return {
+            get: async (path) => this.baselines[path],
+            set: async (path, body) => {
+                this.baselines[path] = body;
+                this.scheduleSaveSettings();
+            },
+        };
     }
 
     async saveSettings(): Promise<void> {
@@ -292,17 +312,44 @@ export default class GoogleSyncPlugin extends Plugin {
         }
     }
 
-    async syncNow(): Promise<void> {
+    async syncNow(confirmed = false): Promise<void> {
         if (!(await this.auth.isConnected())) {
             new Notice("Connect to Google first.");
             return;
         }
         try {
-            const { synced, failed } = await this.router.syncAll();
+            const { synced, failed, blocked } = await this.router.syncAll({ confirmed });
+            if (blocked.length) return; // the router already explained the guard
             new Notice(
                 failed > 0
-                    ? `google-sync: synced ${synced}, ${failed} failed (see console).`
-                    : `google-sync: synced ${synced} note(s).`,
+                    ? `google-sync: pushed ${synced} update(s), ${failed} failed (see console).`
+                    : `google-sync: pushed ${synced} update(s).`,
+            );
+        } catch (e) {
+            new Notice(`google-sync error: ${(e as Error).message}`);
+        }
+    }
+
+    /** Dry run: list what a push would change, without sending anything to Google. */
+    async previewPending(): Promise<void> {
+        if (!(await this.auth.isConnected())) {
+            new Notice("Connect to Google first.");
+            return;
+        }
+        try {
+            const pending = await this.router.previewAll();
+            if (!pending.length) {
+                new Notice("google-sync: everything is up to date — nothing to push.");
+                return;
+            }
+            const lines = pending.map(
+                (p) =>
+                    `${p.path}: ${p.veto ? `BLOCKED (${p.veto})` : p.changedKeys.join(", ") || "(meet link request)"}`,
+            );
+            console.info("[google-sync] pending updates:\n" + lines.join("\n"));
+            new Notice(
+                `google-sync: ${pending.length} note(s) have pending updates (details in console).`,
+                8000,
             );
         } catch (e) {
             new Notice(`google-sync error: ${(e as Error).message}`);

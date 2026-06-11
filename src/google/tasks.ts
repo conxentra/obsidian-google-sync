@@ -105,6 +105,13 @@ export class GoogleTasksClient {
         })) as GoogleTask;
     }
 
+    async getTask(taskListId: string, taskId: string): Promise<GoogleTask> {
+        return (await this.call({
+            method: "GET",
+            url: `${BASE}/lists/${enc(taskListId)}/tasks/${enc(taskId)}`,
+        })) as GoogleTask;
+    }
+
     async patchTask(
         taskListId: string,
         taskId: string,

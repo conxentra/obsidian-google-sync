@@ -18,6 +18,9 @@ export interface GoogleSyncSettings {
     defaultTimezone: string;
     // Behavior
     syncOnModify: boolean;
+    /** Mass-update circuit breaker: more pending pushes than this in one run blocks the
+     * run until explicitly confirmed, so a runaway template/script can't corrupt en masse. */
+    maxPatchesPerRun: number;
     importOnStartup: boolean;
     importOnlyDefaultCalendar: boolean;
     importOnlyDefaultTaskList: boolean;
@@ -48,6 +51,7 @@ export const DEFAULT_SETTINGS: GoogleSyncSettings = {
     taskListId: "@default",
     defaultTimezone: systemTimezone(),
     syncOnModify: true,
+    maxPatchesPerRun: 10,
     importOnStartup: false,
     importOnlyDefaultCalendar: true,
     importOnlyDefaultTaskList: true,

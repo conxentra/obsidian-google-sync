@@ -15,8 +15,18 @@ export function registerCommands(plugin: GoogleSyncPlugin): void {
     });
     plugin.addCommand({
         id: "sync-now",
-        name: "Sync now",
+        name: "Push updates to Google",
         callback: () => void plugin.syncNow(),
+    });
+    plugin.addCommand({
+        id: "sync-now-confirmed",
+        name: "Push pending updates (confirmed)",
+        callback: () => void plugin.syncNow(true),
+    });
+    plugin.addCommand({
+        id: "preview-pending",
+        name: "Preview pending Google updates (dry run)",
+        callback: () => void plugin.previewPending(),
     });
     plugin.addCommand({
         id: "import-from-google",

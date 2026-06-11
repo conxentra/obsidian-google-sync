@@ -73,6 +73,13 @@ export class GoogleCalendarClient {
         })) as GoogleEvent;
     }
 
+    async getEvent(calendarId: string, eventId: string): Promise<GoogleEvent> {
+        return (await this.call({
+            method: "GET",
+            url: `${BASE}/calendars/${enc(calendarId)}/events/${enc(eventId)}`,
+        })) as GoogleEvent;
+    }
+
     async patchEvent(
         calendarId: string,
         eventId: string,

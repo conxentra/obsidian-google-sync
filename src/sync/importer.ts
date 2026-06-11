@@ -6,6 +6,7 @@ import { VaultPort } from "../vault/port";
 import { basenameOf, normalizeVaultPath } from "../vault/paths";
 import { mergeManagedFrontmatter, remoteEventToNote, remoteTaskToNote } from "./mapper";
 import { isEventAllowed } from "./recurrence";
+import { BaselineStore, GoogleBody, projectRemoteBody } from "./baseline";
 
 export interface ImportCounts {
     events: number;
@@ -84,6 +85,9 @@ export class GoogleImporter {
         /** Called with each note path the importer creates or rewrites, so the caller can
          * suppress the resulting vault events from echoing back into sync. */
         private readonly onTouch: (path: string) => void = () => {},
+        /** Imported notes seed their sync baseline with the remote body, so a later edit
+         * diffs against exactly what Google held at import time. */
+        private readonly baselines?: BaselineStore,
     ) {}
 
     async importAll(options: ImportOptions = {}): Promise<ImportCounts> {
@@ -155,6 +159,7 @@ export class GoogleImporter {
                 );
                 await this.port.writeFrontmatter(existing, merged);
                 this.onTouch(existing);
+                await this.baselines?.set(existing, projectRemoteBody(event as GoogleBody, "event"));
             } else {
                 const path = await pathFor(
                     this.port,
@@ -165,6 +170,7 @@ export class GoogleImporter {
                 );
                 await this.port.upsertMarkdown(path, fm);
                 this.onTouch(path);
+                await this.baselines?.set(path, projectRemoteBody(event as GoogleBody, "event"));
             }
             counts.events++;
         } catch (e) {
@@ -223,6 +229,7 @@ export class GoogleImporter {
                 );
                 await this.port.writeFrontmatter(existing, merged);
                 this.onTouch(existing);
+                await this.baselines?.set(existing, projectRemoteBody(task as GoogleBody, "task"));
                 counts.tasks++;
                 return basenameOf(existing);
             }
@@ -235,6 +242,7 @@ export class GoogleImporter {
             );
             await this.port.upsertMarkdown(path, fm);
             this.onTouch(path);
+            await this.baselines?.set(path, projectRemoteBody(task as GoogleBody, "task"));
             counts.tasks++;
             return basenameOf(path);
         } catch (e) {
