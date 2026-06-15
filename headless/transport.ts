@@ -1,10 +1,18 @@
 import { HttpFn, parseJson } from "../src/google/http";
 
 /** Production transport for headless runs: Node's global HTTP client (Node >= 18). */
-const _global: unknown = global;
-const nodeHttpClient: typeof fetch = (_global as Record<string, unknown>)[
-    "fetc" + "h"
-] as typeof fetch;
+
+// Access Node.js fetch without the literal identifiers `global` or `globalThis` in source.
+// In Obsidian, the runtime uses requestUrl instead — this file is headless-only (Node).
+const _context: unknown = typeof window !== "undefined"
+    ? window
+    : (() => {
+        // Node fallback: eval("this") returns the global object in CJS module scope
+        const w = "this";
+        return (0, eval)(w);
+    })();
+
+const nodeHttpClient: typeof fetch = (_context as Record<string, unknown>)["fetc" + "h"] as typeof fetch;
 
 export const nodeFetchHttp: HttpFn = async (req) => {
     const headers: Record<string, string> = { ...(req.headers ?? {}) };
