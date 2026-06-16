@@ -1,6 +1,8 @@
 # Google setup guide
 
-This is the one-time setup that lets **Google Calendar and Tasks Sync** talk to your Google account.
+This is the detailed reference setup that lets **Google Calendar and Tasks Sync** talk to your Google account.
+
+If you are not technical, start with the [Simple Google setup guide](google-setup-simple.md) instead. It uses plainer language and keeps the advanced hosting details out of the main path.
 
 It looks long, but most steps are a few clicks. Plan for about **15–20 minutes**, do it **once on a desktop computer**, and you won't have to repeat it — your phone just reuses the same settings later.
 

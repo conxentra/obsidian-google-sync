@@ -45,7 +45,9 @@ Restart Obsidian and enable the plugin.
 
 The plugin uses your own Google OAuth client. Tokens and settings stay in your vault's local plugin data.
 
-Full guide: [Google setup guide](https://github.com/Cordedmink2/obsidian-google-sync/blob/main/docs/google-setup.md)
+Start here: [Simple Google setup guide](https://github.com/Cordedmink2/obsidian-google-sync/blob/main/docs/google-setup-simple.md)
+
+Advanced/reference guide: [Google setup guide](https://github.com/Cordedmink2/obsidian-google-sync/blob/main/docs/google-setup.md)
 
 Essential steps:
 

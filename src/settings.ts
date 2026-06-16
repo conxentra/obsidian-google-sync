@@ -9,6 +9,8 @@ import { normalizeVaultPath } from "./vault/paths";
 import { isLikelyClientId, normalizeRedirectUri, redirectUriWarning } from "./setup-checks";
 
 const SETUP_GUIDE_URL =
+    "https://github.com/Cordedmink2/obsidian-google-sync/blob/main/docs/google-setup-simple.md";
+const ADVANCED_SETUP_GUIDE_URL =
     "https://github.com/Cordedmink2/obsidian-google-sync/blob/main/docs/google-setup.md";
 /** Google Cloud / Auth Platform consoles the setup steps point at. */
 const GOOGLE_LINKS: { label: string; url: string }[] = [
@@ -253,7 +255,10 @@ export class GoogleSyncSettingTab extends PluginSettingTab {
                 "Most people should follow the setup guide first. It walks through the no-code setup path, then explains the advanced bring-your-own-host option.",
             )
             .addButton((b) =>
-                b.setButtonText("Open setup guide").onClick(() => window.open(SETUP_GUIDE_URL, "_blank")),
+                b.setButtonText("Open simple guide").onClick(() => window.open(SETUP_GUIDE_URL, "_blank")),
+            )
+            .addButton((b) =>
+                b.setButtonText("Advanced guide").onClick(() => window.open(ADVANCED_SETUP_GUIDE_URL, "_blank")),
             )
             .addButton((b) =>
                 b.setButtonText("Open Google setup pages").onClick(() => {
