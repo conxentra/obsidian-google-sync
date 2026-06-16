@@ -13,7 +13,7 @@ import { BaselineStore, GoogleBody } from "./sync/baseline";
 import { registerCommands } from "./commands";
 import { ObsidianVaultPort } from "./vault/obsidian-port";
 import { friendlyAuthError } from "./google/auth-errors";
-import { checkCredentialFields, formatCheck } from "./setup-checks";
+import { checkCredentialFields, checkBridgeResponse, formatCheck } from "./setup-checks";
 
 interface PersistedData {
     settings: GoogleSyncSettings;
@@ -55,20 +55,22 @@ export default class GoogleSyncPlugin extends Plugin {
     private settingsSaveTimer: number | null = null;
     private settingsSavePending: Promise<void> | null = null;
     private importInFlight: Promise<void> | null = null;
+    /** Late-bound HTTP transport, used by bridge-URL verification. */
+    private http!: HttpFn;
 
     async onload(): Promise<void> {
         await this.loadAll();
 
         // Late-bound transport so e2e can inject a mock after load.
-        const http: HttpFn = (req) => {
+        this.http = (req) => {
             const injected = (window as unknown as { __gsyncHttp?: HttpFn }).__gsyncHttp;
             return (typeof injected === "function" ? injected : obsidianHttp)(req);
         };
 
-        this.auth = new GoogleAuth(http, () => this.oauthConfig(), this.tokenStore());
+        this.auth = new GoogleAuth(this.http, () => this.oauthConfig(), this.tokenStore());
         const tokenProvider = () => this.auth.getAccessToken();
-        this.calendar = new GoogleCalendarClient(http, tokenProvider);
-        this.tasks = new GoogleTasksClient(http, tokenProvider);
+        this.calendar = new GoogleCalendarClient(this.http, tokenProvider);
+        this.tasks = new GoogleTasksClient(this.http, tokenProvider);
         const suppress = (path: string) => this.suppressor.suppress(path, Date.now());
         const notice = (m: string) => {
             new Notice(m);
@@ -307,6 +309,28 @@ export default class GoogleSyncPlugin extends Plugin {
             return `Connection OK — ${cals.length} calendar(s) visible.`;
         } catch (e) {
             return `Connection failed: ${(e as Error).message}`;
+        }
+    }
+
+    /** Fetch the redirect bridge URL and confirm it returns the expected HTML. */
+    async verifyBridgeUrl(): Promise<string> {
+        const url = this.settings.redirectUri.trim();
+        if (!url) return "No redirect bridge URL set — paste one first.";
+
+        try {
+            const res = await this.http({
+                url,
+                method: "GET",
+                headers: {},
+            });
+            const { ok, message } = checkBridgeResponse(
+                res.status,
+                (res.text ?? "").toString(),
+            );
+            if (ok) return message;
+            return message;
+        } catch (e) {
+            return `Could not reach the bridge URL: ${(e as Error).message}. Check that the URL is correct and the page is publicly accessible.`;
         }
     }
 

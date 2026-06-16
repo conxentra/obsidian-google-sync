@@ -22,6 +22,27 @@ export function redirectUriWarning(value: string): string | null {
     return null;
 }
 
+/** Verify that a fetched HTTP response body looks like a valid bridge page. Returns a human-readable check result. */
+export function checkBridgeResponse(
+    status: number,
+    body: string,
+): { ok: boolean; message: string } {
+    if (status < 200 || status >= 300) {
+        return {
+            ok: false,
+            message: `Bridge returned HTTP ${status} (expected 200). Check that the URL is correct and the page is live.`,
+        };
+    }
+    if (body.includes("obsidian://google-sync")) {
+        return { ok: true, message: "Bridge URL ok — the page is live and ready." };
+    }
+    return {
+        ok: false,
+        message:
+            "Bridge URL responded, but the page does not look like the expected bridge. Did you upload the correct file?",
+    };
+}
+
 export type CheckLevel = "ok" | "warn" | "fail";
 
 export interface SetupCheck {

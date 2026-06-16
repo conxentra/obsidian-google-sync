@@ -348,6 +348,19 @@ export class GoogleSyncSettingTab extends PluginSettingTab {
                         new Notice("Copy failed. Select the bridge URL field and copy it manually.");
                     }
                 }),
+            )
+            .addButton((b) =>
+                b.setButtonText("Test bridge URL").onClick(async () => {
+                    const notice = new Notice("Testing bridge URL…", 0);
+                    try {
+                        const result = await this.plugin.verifyBridgeUrl();
+                        notice.setMessage(result);
+                    } catch (e) {
+                        notice.setMessage(
+                            `Bridge test error: ${(e as Error).message}`,
+                        );
+                    }
+                }),
             );
 
         this.autoLoadPickers(connected);
