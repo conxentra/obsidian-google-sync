@@ -47,7 +47,7 @@ export class Lifecycle {
             // filesystem error) must not abort the remaining moves.
             try {
                 if (!(await this.port.exists(action.path))) continue;
-                if (action.type === "archive" && action.closeTasks.length && s.taskListId) {
+                if (action.type === "archive" && action.closeTasks.length) {
                     for (const basename of action.closeTasks)
                         await this.closeLinkedTask(basename, s);
                 }
@@ -68,9 +68,12 @@ export class Lifecycle {
             if (detectKind(ref.path, s.eventsFolder, s.tasksFolder) !== "task") continue;
             const fm = await this.port.readFrontmatter(ref.path);
             const gid = fm.googleId;
-            if (typeof gid === "string" && gid) {
+            // The note knows which list it was imported from; only fall back to the
+            // default list for notes without one (patching the wrong list 404s).
+            const listId = (typeof fm.tasklist === "string" && fm.tasklist) || s.taskListId;
+            if (typeof gid === "string" && gid && listId) {
                 try {
-                    await this.tasks.patchTask(s.taskListId, gid, { status: "completed" });
+                    await this.tasks.patchTask(listId, gid, { status: "completed" });
                 } catch (e) {
                     this.notify(
                         `Google sync: could not close task ${basename}: ${(e as Error).message}`,

@@ -15,6 +15,19 @@ export class GoogleApiError extends Error {
 /** Supplies a currently-valid OAuth access token (refreshing as needed). */
 export type TokenProvider = () => Promise<string>;
 
+/** Append the defined entries as an encoded query string. */
+export function addQuery(
+    url: string,
+    params: Record<string, string | number | boolean | undefined>,
+): string {
+    const enc = encodeURIComponent;
+    const query = Object.entries(params)
+        .filter((entry): entry is [string, string | number | boolean] => entry[1] !== undefined)
+        .map(([key, value]) => `${enc(key)}=${enc(String(value))}`)
+        .join("&");
+    return query ? `${url}?${query}` : url;
+}
+
 export interface ApiCall {
     method: string;
     url: string;

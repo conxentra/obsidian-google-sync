@@ -99,6 +99,12 @@ function parseArgs(argv: string[]): Parsed {
         } else if (a.startsWith("--")) fail(`unknown flag: ${a}`);
         else positional.push(a);
     }
+    if (flags.daysPast !== undefined && !Number.isFinite(flags.daysPast)) {
+        fail("--days-past must be a number");
+    }
+    if (flags.daysAhead !== undefined && !Number.isFinite(flags.daysAhead)) {
+        fail("--days-ahead must be a number");
+    }
     // --config > $GSYNC_CONFIG > ~/.config/gsync/gsync.json
     if (!flags.config && process.env.GSYNC_CONFIG) flags.config = process.env.GSYNC_CONFIG;
     if (!flags.config) {

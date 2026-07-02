@@ -1,6 +1,6 @@
 import { GoogleCalendarClient } from "../google/calendar";
 import { GoogleTasksClient } from "../google/tasks";
-import { GoogleSyncSettings } from "../settings-data";
+import { DEFAULT_SETTINGS, GoogleSyncSettings } from "../settings-data";
 import { GoogleEvent, GoogleTask } from "../types";
 import { VaultPort } from "../vault/port";
 import { basenameOf, normalizeVaultPath } from "../vault/paths";
@@ -115,9 +115,17 @@ export class GoogleImporter {
         const s = this.settings();
         const dayMs = 24 * 60 * 60 * 1000;
         const now = Date.now();
+        // A hand-edited data.json can hold non-numeric day counts; NaN here would make
+        // toISOString() throw and abort the whole event import.
+        const days = (value: number, fallback: number) =>
+            Number.isFinite(value) ? Math.max(0, value) : fallback;
         return {
-            timeMin: new Date(now - Math.max(0, s.importPastDays) * dayMs).toISOString(),
-            timeMax: new Date(now + Math.max(0, s.importFutureDays) * dayMs).toISOString(),
+            timeMin: new Date(
+                now - days(s.importPastDays, DEFAULT_SETTINGS.importPastDays) * dayMs,
+            ).toISOString(),
+            timeMax: new Date(
+                now + days(s.importFutureDays, DEFAULT_SETTINGS.importFutureDays) * dayMs,
+            ).toISOString(),
         };
     }
 

@@ -104,4 +104,15 @@ describe("GoogleCalendarClient", () => {
         expect(cals).to.have.length(1);
         expect(cals[0]?.id).to.equal("primary");
     });
+
+    it("follows nextPageToken across calendar list pages", async () => {
+        const { calls, fn } = fakeHttp([
+            jsonResp(200, { items: [{ id: "a" }], nextPageToken: "p2" }),
+            jsonResp(200, { items: [{ id: "b" }] }),
+        ]);
+        const client = new GoogleCalendarClient(fn, token, noWaitRetry);
+        const cals = await client.listCalendars();
+        expect(cals.map((c) => c.id)).to.deep.equal(["a", "b"]);
+        expect(calls[1]?.url).to.contain("pageToken=p2");
+    });
 });

@@ -123,6 +123,11 @@ interface TokenResponse {
 
 function toTokenSet(json: unknown, nowMs: number, fallbackRefresh?: string): TokenSet {
     const j = (json ?? {}) as TokenResponse;
+    if (typeof j.access_token !== "string" || !j.access_token) {
+        // A 2xx without a token would otherwise persist an unusable token set and
+        // report "connected" while every API call fails with a bare 401.
+        throw new Error("Token response contained no access_token");
+    }
     return {
         accessToken: j.access_token,
         refreshToken: j.refresh_token ?? fallbackRefresh,
