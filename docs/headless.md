@@ -21,11 +21,11 @@ npm run build:headless
 This produces three self-contained Node (>= 20) scripts in `dist/headless/` — no
 `node_modules` needed at the destination:
 
-| Script | Purpose |
-| --- | --- |
-| `sync.cjs` | The scheduled sync run |
-| `authorize.cjs` | One-time OAuth bootstrap (writes the token file) |
-| `cli.cjs` | Agent/scripting CLI for Google Tasks + Calendar (see [skill/google-tasks-calendar](../skill/google-tasks-calendar/SKILL.md)) |
+| Script          | Purpose                                                                                                                      |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `sync.cjs`      | The scheduled sync run                                                                                                       |
+| `authorize.cjs` | One-time OAuth bootstrap (writes the token file)                                                                             |
+| `cli.cjs`       | Agent/scripting CLI for Google Tasks + Calendar (see [skill/google-tasks-calendar](../skill/google-tasks-calendar/SKILL.md)) |
 
 ## Configuration
 
@@ -53,7 +53,7 @@ One JSON file drives everything (`gsync.json`):
         "tasksFolder": "tasks",
         "importPastDays": 7,
         "importFutureDays": 90,
-        "maxPatchesPerRun": 10
+        "maxPatchesPerRun": 10,
     },
 
     "git": {
@@ -61,11 +61,11 @@ One JSON file drives everything (`gsync.json`):
         "remote": "origin",
         "branch": "", // empty = the vault's current branch
         "authorName": "google-sync",
-        "authorEmail": "google-sync@localhost"
+        "authorEmail": "google-sync@localhost",
     },
 
     // Port the one-time authorize listener binds on 127.0.0.1.
-    "loopbackPort": 8765
+    "loopbackPort": 8765,
 }
 ```
 

@@ -1,4 +1,7 @@
-import { existsSync, nodePath, nodeSleep, os } from "./node-runtime";
+import { existsSync } from "node:fs";
+import * as os from "node:os";
+import * as nodePath from "node:path";
+import { setTimeout as nodeSleep } from "node:timers/promises";
 import { DEFAULT_SCOPES, GoogleAuth } from "../src/google/auth";
 import { GoogleCalendarClient, WriteEventOptions } from "../src/google/calendar";
 import { GoogleTasksClient } from "../src/google/tasks";
@@ -95,6 +98,12 @@ function parseArgs(argv: string[]): Parsed {
             process.exit(0);
         } else if (a.startsWith("--")) fail(`unknown flag: ${a}`);
         else positional.push(a);
+    }
+    if (flags.daysPast !== undefined && !Number.isFinite(flags.daysPast)) {
+        fail("--days-past must be a number");
+    }
+    if (flags.daysAhead !== undefined && !Number.isFinite(flags.daysAhead)) {
+        fail("--days-ahead must be a number");
     }
     // --config > $GSYNC_CONFIG > ~/.config/gsync/gsync.json
     if (!flags.config && process.env.GSYNC_CONFIG) flags.config = process.env.GSYNC_CONFIG;

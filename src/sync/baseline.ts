@@ -100,7 +100,9 @@ export function diffBody(baseline: GoogleBody, current: GoogleBody): GoogleBody 
     for (const [k, v] of Object.entries(current)) {
         if (v === undefined) continue;
         const same =
-            k === "start" || k === "end" ? sameEventTime(baseline[k], v) : sameValue(baseline[k], v);
+            k === "start" || k === "end"
+                ? sameEventTime(baseline[k], v)
+                : sameValue(baseline[k], v);
         if (!same) patch[k] = v;
     }
     for (const k of Object.keys(baseline)) {
@@ -133,7 +135,10 @@ function isPlaceholderTitle(value: unknown): boolean {
 export function vetPatch(patch: GoogleBody, baseline: GoogleBody, kind: NoteKind): PatchVeto {
     const titleKey = kind === "event" ? "summary" : "title";
     if (titleKey in patch && isPlaceholderTitle(patch[titleKey])) {
-        return { ok: false, reason: `refusing to push placeholder ${titleKey} "${String(patch[titleKey])}"` };
+        return {
+            ok: false,
+            reason: `refusing to push placeholder ${titleKey} "${String(patch[titleKey])}"`,
+        };
     }
     const cleared = Object.values(patch).filter((v) => v === null).length;
     const populated = Object.values(baseline).filter((v) => v != null).length;

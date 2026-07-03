@@ -47,22 +47,22 @@ npm run test:unit
 ### Comparable Obsidian/plugin patterns
 
 1. **BYO OAuth + local loopback**
-   - Example: TaskNotes tells users to create a Desktop OAuth client and click Connect.
-   - Much easier than hosting a bridge, but desktop-first. Mobile cannot run a reliable local callback server.
+    - Example: TaskNotes tells users to create a Desktop OAuth client and click Connect.
+    - Much easier than hosting a bridge, but desktop-first. Mobile cannot run a reliable local callback server.
 
 2. **BYO OAuth + hosted/static bridge**
-   - Current plugin approach.
-   - Works cross-platform, including iOS, and avoids a developer-operated token backend.
-   - Main pain: users must fork/deploy a bridge and exactly match redirect URI strings.
+    - Current plugin approach.
+    - Works cross-platform, including iOS, and avoids a developer-operated token backend.
+    - Main pain: users must fork/deploy a bridge and exactly match redirect URI strings.
 
 3. **Developer-owned OAuth app + developer-hosted bridge/backend**
-   - Best possible UX: user clicks Connect.
-   - Requires Google app verification for broad public use and careful privacy/security commitments.
-   - If a backend handles token exchange, the project becomes an operated service with credentials, availability, abuse, logging, and data-protection responsibilities.
+    - Best possible UX: user clicks Connect.
+    - Requires Google app verification for broad public use and careful privacy/security commitments.
+    - If a backend handles token exchange, the project becomes an operated service with credentials, availability, abuse, logging, and data-protection responsibilities.
 
 4. **Device authorization flow**
-   - Nice UX for headless apps, but not supported for required Calendar/Tasks scopes.
-   - Not recommended.
+    - Nice UX for headless apps, but not supported for required Calendar/Tasks scopes.
+    - Not recommended.
 
 ## Main user pain points in the current setup
 
@@ -98,17 +98,17 @@ Changes:
 - Use Google’s newer labels where relevant: **Google Auth Platform → Branding / Audience / Data access / Clients** while also mentioning older **APIs & Services → OAuth consent screen / Credentials** labels.
 - Put an estimated time beside each section.
 - Add a one-page “copy exactly” checklist:
-  - Bridge URL opens in browser.
-  - Same bridge URL in Google client and plugin setting.
-  - Includes/removes trailing slash consistently.
-  - OAuth client type is **Web application**, not Desktop, for the bridge method.
-  - Calendar API and Tasks API are enabled.
-  - User email is listed under Test users / Audience.
+    - Bridge URL opens in browser.
+    - Same bridge URL in Google client and plugin setting.
+    - Includes/removes trailing slash consistently.
+    - OAuth client type is **Web application**, not Desktop, for the bridge method.
+    - Calendar API and Tasks API are enabled.
+    - User email is listed under Test users / Audience.
 - Add a troubleshooting table mapping exact Google errors to fixes:
-  - `redirect_uri_mismatch` → URI mismatch/trailing slash/wrong OAuth client type.
-  - `access_denied` / app not verified → add yourself as test user.
-  - `invalid_client` → wrong client ID/secret or copied Desktop client into Web flow.
-  - browser returns to bridge but not Obsidian → OS/deep-link handler issue.
+    - `redirect_uri_mismatch` → URI mismatch/trailing slash/wrong OAuth client type.
+    - `access_denied` / app not verified → add yourself as test user.
+    - `invalid_client` → wrong client ID/secret or copied Desktop client into Web flow.
+    - browser returns to bridge but not Obsidian → OS/deep-link handler issue.
 - Fix `docs/ios-checklist.md` delete-sync line to match current “never delete Google items” model.
 
 Recommended screenshots to include in `docs/assets/google-setup/`:
@@ -139,30 +139,30 @@ Add a **Setup Google account** button/section at the top of settings that walks 
 Suggested settings UI:
 
 - **Connection status card**
-  - Not configured / configured but not connected / connected.
-  - Buttons: **Setup guide**, **Validate setup**, **Connect**, **Disconnect**.
+    - Not configured / configured but not connected / connected.
+    - Buttons: **Setup guide**, **Validate setup**, **Connect**, **Disconnect**.
 - **Step 1: Google Cloud**
-  - Buttons that open the relevant Google URLs:
-    - Project selector: `https://console.cloud.google.com/projectselector2/home/dashboard`
-    - API Library: `https://console.cloud.google.com/apis/library`
-    - Google Auth Platform Audience: `https://console.cloud.google.com/auth/audience`
-    - Clients/Credentials: `https://console.cloud.google.com/auth/clients`
+    - Buttons that open the relevant Google URLs:
+        - Project selector: `https://console.cloud.google.com/projectselector2/home/dashboard`
+        - API Library: `https://console.cloud.google.com/apis/library`
+        - Google Auth Platform Audience: `https://console.cloud.google.com/auth/audience`
+        - Clients/Credentials: `https://console.cloud.google.com/auth/clients`
 - **Step 2: Redirect bridge**
-  - Show the expected GitHub Pages URL pattern.
-  - Field for bridge URL with normalization: trim whitespace; optionally warn about missing trailing slash.
-  - Button: **Open bridge URL**.
+    - Show the expected GitHub Pages URL pattern.
+    - Field for bridge URL with normalization: trim whitespace; optionally warn about missing trailing slash.
+    - Button: **Open bridge URL**.
 - **Step 3: OAuth client values**
-  - Paste Client ID / Secret.
-  - Validate the client ID shape: should end with `.apps.googleusercontent.com`.
+    - Paste Client ID / Secret.
+    - Validate the client ID shape: should end with `.apps.googleusercontent.com`.
 - **Step 4: Connect**
-  - Disabled until required fields are present.
+    - Disabled until required fields are present.
 
 Implementation details:
 
 - Make `Validate setup` return actionable messages, not just `[ok]`/`[--]`.
 - Add a “Copy redirect URL” button next to the bridge field.
 - On failed token exchange, parse `GoogleApiError` payloads and surface likely causes:
-  - `redirect_uri_mismatch`, `invalid_client`, `invalid_grant`, `access_denied`.
+    - `redirect_uri_mismatch`, `invalid_client`, `invalid_grant`, `access_denied`.
 - Make the Connect notice include “If the browser shows redirect_uri_mismatch, check that the bridge URL exactly matches Google Cloud.”
 
 ### Phase 3 — Bridge deployment simplification
@@ -172,18 +172,18 @@ Keep user-owned bridge, but remove the need to fork the whole plugin where possi
 Options:
 
 1. **Tiny standalone bridge repo/template**
-   - Create a separate minimal repo with only `index.html`, `redirect.js`, and a Pages workflow.
-   - Docs say “Use this template” instead of “Fork the whole plugin.”
-   - Less intimidating and fewer irrelevant files.
+    - Create a separate minimal repo with only `index.html`, `redirect.js`, and a Pages workflow.
+    - Docs say “Use this template” instead of “Fork the whole plugin.”
+    - Less intimidating and fewer irrelevant files.
 
 2. **One-file bridge copy/paste**
-   - Provide `docs/bridge-one-file.html` so users can paste it into any static host.
-   - Useful for Cloudflare Pages/Netlify/manual hosting.
+    - Provide `docs/bridge-one-file.html` so users can paste it into any static host.
+    - Useful for Cloudflare Pages/Netlify/manual hosting.
 
 3. **Use the plugin owner’s public static bridge for code forwarding only**
-   - Technically the static bridge sees only single-use code+state and cannot exchange without PKCE verifier/client secret.
-   - But users’ Google OAuth client would need to register the owner’s domain as redirect URI; this may feel less “self-owned” and introduces availability/trust questions.
-   - If offered, label it as “convenience bridge” and keep self-hosted as privacy-first.
+    - Technically the static bridge sees only single-use code+state and cannot exchange without PKCE verifier/client secret.
+    - But users’ Google OAuth client would need to register the owner’s domain as redirect URI; this may feel less “self-owned” and introduces availability/trust questions.
+    - If offered, label it as “convenience bridge” and keep self-hosted as privacy-first.
 
 Recommended: start with the standalone template repo, then evaluate a convenience static bridge if users still struggle.
 

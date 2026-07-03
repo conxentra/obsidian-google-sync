@@ -194,7 +194,11 @@ describe("SyncRouter (one-way, baseline-diffed)", () => {
     it("trips the mass-update breaker in syncAll and pushes only when confirmed", async () => {
         const vault = new MemoryVault();
         for (let i = 0; i < 4; i++) {
-            vault.seed(`tasks/t${i}.md`, { title: `Task ${i}`, completed: true, googleId: `t-${i}` });
+            vault.seed(`tasks/t${i}.md`, {
+                title: `Task ${i}`,
+                completed: true,
+                googleId: `t-${i}`,
+            });
         }
         const baselines: Record<string, GoogleBody> = {};
         for (let i = 0; i < 4; i++) {
@@ -220,7 +224,11 @@ describe("SyncRouter (one-way, baseline-diffed)", () => {
         const vault = new MemoryVault();
         const baselines: Record<string, GoogleBody> = {};
         for (let i = 0; i < 3; i++) {
-            vault.seed(`tasks/t${i}.md`, { title: `Task ${i}`, completed: true, googleId: `t-${i}` });
+            vault.seed(`tasks/t${i}.md`, {
+                title: `Task ${i}`,
+                completed: true,
+                googleId: `t-${i}`,
+            });
             baselines[`tasks/t${i}.md`] = { title: `Task ${i}`, status: "needsAction" };
         }
         const { router, calls, notices } = makeRouter(vault, {

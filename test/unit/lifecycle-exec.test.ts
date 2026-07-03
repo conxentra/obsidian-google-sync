@@ -80,4 +80,44 @@ describe("Lifecycle execution (port-based)", () => {
         expect(JSON.parse(patch?.body ?? "{}")).to.deep.equal({ status: "completed" });
         expect(vault.paths()).to.include("events/archive/trip.md");
     });
+
+    it("closes a linked task in the note's own task list, not the default", async () => {
+        const vault = new MemoryVault();
+        vault.seed("events/trip.md", {
+            title: "Trip",
+            date: "2020-01-01T09:00:00",
+            tasks: ["[[pack-bags]]"],
+        });
+        vault.seed("tasks/pack-bags.md", {
+            title: "Pack bags",
+            googleId: "t-pack",
+            tasklist: "L-other",
+        });
+        const { lifecycle, calls } = makeLifecycle(vault);
+
+        await lifecycle.runOnce();
+
+        const patch = calls.find((c) => c.method === "PATCH" && c.url.includes("/tasks/t-pack"));
+        expect(patch?.url).to.include("/lists/L-other/");
+    });
+
+    it("closes linked tasks even when no default task list is configured", async () => {
+        const vault = new MemoryVault();
+        vault.seed("events/trip.md", {
+            title: "Trip",
+            date: "2020-01-01T09:00:00",
+            tasks: ["[[pack-bags]]"],
+        });
+        vault.seed("tasks/pack-bags.md", {
+            title: "Pack bags",
+            googleId: "t-pack",
+            tasklist: "L-own",
+        });
+        const { lifecycle, calls } = makeLifecycle(vault, { taskListId: "" });
+
+        await lifecycle.runOnce();
+
+        const patch = calls.find((c) => c.method === "PATCH" && c.url.includes("/tasks/t-pack"));
+        expect(patch?.url).to.include("/lists/L-own/");
+    });
 });

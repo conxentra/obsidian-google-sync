@@ -47,7 +47,9 @@ export function extractOAuthError(err: unknown): OAuthErrorInfo {
     }
     if (err instanceof Error) {
         const fromText = matchKnownCode(err.message);
-        return fromText ? { code: fromText, description: err.message } : { description: err.message };
+        return fromText
+            ? { code: fromText, description: err.message }
+            : { description: err.message };
     }
     return {};
 }

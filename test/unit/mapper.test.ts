@@ -347,10 +347,7 @@ describe("taskToGoogle", () => {
     it("keeps the calendar date of an imported UTC-midnight due in a behind-UTC zone", () => {
         // Regression: a re-synced imported due ("...T00:00:00.000Z") parsed into e.g.
         // America/New_York rolled back to the previous day on every patch.
-        const t = taskToGoogle(
-            { title: "X", due: "2026-06-10T00:00:00.000Z" },
-            "America/New_York",
-        );
+        const t = taskToGoogle({ title: "X", due: "2026-06-10T00:00:00.000Z" }, "America/New_York");
         expect(t.due).to.equal("2026-06-10T00:00:00.000Z");
     });
 });

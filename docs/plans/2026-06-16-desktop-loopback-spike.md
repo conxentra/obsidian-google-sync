@@ -27,13 +27,12 @@ Let desktop users (macOS/Windows/Linux) skip the bridge-hosting step entirely. I
 
 - The scanner checks **repo source files**, not just the runtime bundle.
 - A literal `require(` in source files will trigger `require() style import is forbidden`.
-- Can use `Module._load` avoidance pattern from `scanner-avoidance-techniques.md`:
-  ```typescript
-  const loadModule = (name: string): unknown =>
-      (module as any).constructor._load(name, module, false);
-  const httpModule = loadModule("ht" + "tp") as typeof import("http");
-  ```
-- This is acceptable per the existing project convention: warnings in source are tolerable when `npm run check:runtime-bundle` passes and release assets are clean. The plugin skill says: "do not churn patch releases solely for benign headless/* source warnings" — same reasoning applies here.
+- **Do NOT dodge the scanner** (no `Module._load`, no string-split module names). Obsidian's
+  developer policies prohibit obfuscated/disguised code, and evading review is far worse than a
+  scanner warning. This repo previously used that pattern in `headless/` and it was removed —
+  Node-only tooling uses plain `node:` imports, and `npm run check:runtime-bundle` proves the
+  release bundle (`main.js`) contains none of it. If a scanner warning fires on Node-only files,
+  explain it in the submission instead of hiding it.
 - Keep the loopback code in a single file (`src/google/loopback-server.ts`) with an ESLint override so other files stay clean.
 
 ### OAuth client type
@@ -43,12 +42,14 @@ Current setup uses **Web application** client type with an HTTPS bridge URL. The
 **Two options:**
 
 **Option A: Users add loopback URI to their existing Web application client**
+
 - Add `http://127.0.0.1` to the Authorized redirect URIs in the existing Web application OAuth client.
 - Works with their existing Client ID/secret.
 - Google allows both HTTPS bridge URIs and `http://127.0.0.1` loopback URIs on the same Web application client.
 - Simplest for users — they just add one more URL.
 
 **Option B: Add a Desktop app OAuth client path**
+
 - Create a separate "Desktop app" OAuth client type.
 - Different client ID/secret.
 - More complex to document.
@@ -85,9 +86,10 @@ export interface LoopbackResult {
  * Returns the redirect URI and a promise that resolves with code+state.
  * The server closes itself after one callback.
  */
-export function startLoopbackServer(
-    timeoutMs = 5 * 60 * 1000,
-): { redirectUri: string; result: Promise<LoopbackResult> } {
+export function startLoopbackServer(timeoutMs = 5 * 60 * 1000): {
+    redirectUri: string;
+    result: Promise<LoopbackResult>;
+} {
     // ... uses Module._load to get http module
     // ... server.listen(0), resolves on first GET /?code=...&state=...
     // ... times out after timeoutMs
@@ -102,6 +104,7 @@ Add a method `buildAuthUrl(redirectUri: string): string` that builds the Google 
 ### Changes to `src/main.ts`
 
 Update `connect()` to:
+
 1. Check if `isDesktopOnly` or platform permits loopback
 2. If yes: start loopback server → open auth URL → wait for callback → complete auth
 3. If no (mobile): use existing bridge approach
@@ -113,14 +116,14 @@ Update `connect()` to:
 
 ## Trade-offs
 
-| Factor | Bridge (current) | Loopback (new) |
-|--------|-----------------|----------------|
-| Hosting needed | Yes (GitHub Pages, etc.) | No |
-| Works on mobile | Yes | No |
-| OAuth client type | Web application | Web application (+ loopback URI) |
-| Setup complexity | Higher (fork repo, host page) | Lower (just add one URI) |
-| Works offline | N/A (needs internet) | N/A (needs internet) |
-| Scanner impact | None | Small (one file with avoidance pattern) |
+| Factor            | Bridge (current)              | Loopback (new)                          |
+| ----------------- | ----------------------------- | --------------------------------------- |
+| Hosting needed    | Yes (GitHub Pages, etc.)      | No                                      |
+| Works on mobile   | Yes                           | No                                      |
+| OAuth client type | Web application               | Web application (+ loopback URI)        |
+| Setup complexity  | Higher (fork repo, host page) | Lower (just add one URI)                |
+| Works offline     | N/A (needs internet)          | N/A (needs internet)                    |
+| Scanner impact    | None                          | Small (one file with avoidance pattern) |
 
 ## Open questions
 

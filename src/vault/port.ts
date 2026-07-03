@@ -28,7 +28,11 @@ export interface VaultPort {
     writeFrontmatterKey(path: string, key: string, value: unknown): Promise<void>;
 
     /** Create (with parent folders) or overwrite a note with frontmatter + body. */
-    upsertMarkdown(path: string, frontmatter: Record<string, unknown>, body?: string): Promise<void>;
+    upsertMarkdown(
+        path: string,
+        frontmatter: Record<string, unknown>,
+        body?: string,
+    ): Promise<void>;
 
     /** Move a note, creating the destination folder if needed. */
     move(oldPath: string, newPath: string): Promise<void>;

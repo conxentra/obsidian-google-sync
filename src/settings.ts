@@ -255,10 +255,14 @@ export class GoogleSyncSettingTab extends PluginSettingTab {
                 "Most people should follow the setup guide first. It walks through the no-code setup path, then explains the advanced bring-your-own-host option.",
             )
             .addButton((b) =>
-                b.setButtonText("Open simple guide").onClick(() => window.open(SETUP_GUIDE_URL, "_blank")),
+                b
+                    .setButtonText("Open simple guide")
+                    .onClick(() => window.open(SETUP_GUIDE_URL, "_blank")),
             )
             .addButton((b) =>
-                b.setButtonText("Advanced guide").onClick(() => window.open(ADVANCED_SETUP_GUIDE_URL, "_blank")),
+                b
+                    .setButtonText("Advanced guide")
+                    .onClick(() => window.open(ADVANCED_SETUP_GUIDE_URL, "_blank")),
             )
             .addButton((b) =>
                 b.setButtonText("Open Google setup pages").onClick(() => {
@@ -301,12 +305,17 @@ export class GoogleSyncSettingTab extends PluginSettingTab {
                 }),
             );
 
-        this.text("OAuth client ID", "From your Google Cloud Web application OAuth client.", "clientId", {
-            validate: (v) => {
-                if (v.trim() === "") return "Required to connect";
-                return isLikelyClientId(v) ? null : "Should end in .apps.googleusercontent.com";
+        this.text(
+            "OAuth client ID",
+            "From your Google Cloud Web application OAuth client.",
+            "clientId",
+            {
+                validate: (v) => {
+                    if (v.trim() === "") return "Required to connect";
+                    return isLikelyClientId(v) ? null : "Should end in .apps.googleusercontent.com";
+                },
             },
-        });
+        );
         this.text("OAuth client secret", "From your Google Cloud OAuth client.", "clientSecret", {
             validate: (v) => (v.trim() === "" ? "Required to connect" : null),
         });
@@ -345,7 +354,9 @@ export class GoogleSyncSettingTab extends PluginSettingTab {
                         new Notice("Copied bridge URL.");
                     } catch (e) {
                         console.warn("[google-sync] could not copy bridge URL:", e);
-                        new Notice("Copy failed. Select the bridge URL field and copy it manually.");
+                        new Notice(
+                            "Copy failed. Select the bridge URL field and copy it manually.",
+                        );
                     }
                 }),
             )
@@ -356,9 +367,7 @@ export class GoogleSyncSettingTab extends PluginSettingTab {
                         const result = await this.plugin.verifyBridgeUrl();
                         notice.setMessage(result);
                     } catch (e) {
-                        notice.setMessage(
-                            `Bridge test error: ${(e as Error).message}`,
-                        );
+                        notice.setMessage(`Bridge test error: ${(e as Error).message}`);
                     }
                 }),
             );

@@ -27,10 +27,28 @@ jobs:
                   node-version: "20"
                   cache: npm
 
+            - name: Verify tag matches manifest version
+              run: |
+                  MANIFEST_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('manifest.json','utf8')).version")
+                  if [ "$GITHUB_REF_NAME" != "$MANIFEST_VERSION" ]; then
+                      echo "Tag $GITHUB_REF_NAME does not match manifest.json version $MANIFEST_VERSION" >&2
+                      exit 1
+                  fi
+
             - name: Build
               run: |
                   npm ci
                   npm run build
+
+            - name: Check release metadata and bundle
+              env:
+                  ALLOW_EXISTING_RELEASE_TAG: "1"
+              run: |
+                  npm run check:release-metadata
+                  node scripts/check-runtime-bundle.mjs
+
+            - name: Run unit tests
+              run: npm run test:unit
 
             - name: Create GitHub release and upload assets
               uses: softprops/action-gh-release@v2

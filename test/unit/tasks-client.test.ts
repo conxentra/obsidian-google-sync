@@ -13,6 +13,17 @@ describe("GoogleTasksClient", () => {
         expect(calls[0]?.url).to.equal("https://tasks.googleapis.com/tasks/v1/users/@me/lists");
     });
 
+    it("follows nextPageToken across task list pages", async () => {
+        const { calls, fn } = fakeHttp([
+            jsonResp(200, { items: [{ id: "L1" }], nextPageToken: "p2" }),
+            jsonResp(200, { items: [{ id: "L2" }] }),
+        ]);
+        const client = new GoogleTasksClient(fn, token, noWaitRetry);
+        const lists = await client.listTaskLists();
+        expect(lists.map((l) => l.id)).to.deep.equal(["L1", "L2"]);
+        expect(calls[1]?.url).to.contain("pageToken=p2");
+    });
+
     it("inserts a task with bearer auth and JSON body", async () => {
         const { calls, fn } = fakeHttp([jsonResp(200, { id: "t1", title: "Buy milk" })]);
         const client = new GoogleTasksClient(fn, token, noWaitRetry);

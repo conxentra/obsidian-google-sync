@@ -91,6 +91,17 @@ describe("token exchange", () => {
         expect(tokens.accessToken).to.equal("at2");
         expect(tokens.refreshToken).to.equal("old-rt");
     });
+
+    it("rejects a 2xx token response with no access_token", async () => {
+        const { fn } = fakeHttp([jsonResp(200, { unexpected: true })]);
+        let err: unknown;
+        try {
+            await exchangeCode(fn, config, "c", "v", () => 0, noWaitRetry);
+        } catch (e) {
+            err = e;
+        }
+        expect((err as Error)?.message).to.contain("access_token");
+    });
 });
 
 describe("GoogleAuth", () => {

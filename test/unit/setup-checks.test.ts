@@ -29,9 +29,7 @@ describe("setup checks", () => {
             redirectUri: "https://example.com/bridge/",
         });
         expect(checks.map((c) => c.level)).to.deep.equal(["warn", "fail", "ok"]);
-        expect(checks.map(formatCheck).join("\n")).to.contain(
-            "[!] OAuth client ID looks unusual",
-        );
+        expect(checks.map(formatCheck).join("\n")).to.contain("[!] OAuth client ID looks unusual");
     });
 
     describe("checkBridgeResponse", () => {
@@ -57,18 +55,18 @@ describe("setup checks", () => {
 
         it("passes checking the single-file bridge HTML", () => {
             const html = [
-                '<!doctype html>',
+                "<!doctype html>",
                 '<html lang="en">',
-                '<head>',
-                '<script>',
-                'function computeBridgeRedirect(search) {',
+                "<head>",
+                "<script>",
+                "function computeBridgeRedirect(search) {",
                 '    const p = new URLSearchParams(search || "");',
                 '    const error = p.get("error");',
                 '    const code = p.get("code");',
                 '    const state = p.get("state");',
-                '    if (error) {',
+                "    if (error) {",
                 '        return { target: "obsidian://google-sync?error=" + encodeURIComponent(error) };',
-                '    }',
+                "    }",
                 "</script>",
                 "</html>",
             ].join("\n");

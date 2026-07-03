@@ -1,6 +1,6 @@
 import { GoogleEvent } from "../types";
 import { HttpFn, RetryOptions } from "./http";
-import { ApiCall, TokenProvider, apiCall } from "./api";
+import { ApiCall, TokenProvider, addQuery, apiCall } from "./api";
 
 const BASE = "https://www.googleapis.com/calendar/v3";
 const enc = encodeURIComponent;
@@ -36,17 +36,6 @@ function writeQuery(o: WriteEventOptions): Record<string, string | number | bool
         supportsAttachments: o.supportsAttachments,
         sendUpdates: o.sendUpdates,
     };
-}
-
-function addQuery(
-    url: string,
-    params: Record<string, string | number | boolean | undefined>,
-): string {
-    const query = Object.entries(params)
-        .filter((entry): entry is [string, string | number | boolean] => entry[1] !== undefined)
-        .map(([key, value]) => `${enc(key)}=${enc(String(value))}`)
-        .join("&");
-    return query ? `${url}?${query}` : url;
 }
 
 /** Thin Google Calendar v3 client over an injectable transport. */
@@ -97,10 +86,17 @@ export class GoogleCalendarClient {
     }
 
     async listCalendars(): Promise<CalendarListEntry[]> {
-        const r = (await this.call({ method: "GET", url: `${BASE}/users/me/calendarList` })) as {
-            items?: CalendarListEntry[];
-        };
-        return r.items ?? [];
+        const items: CalendarListEntry[] = [];
+        let pageToken: string | undefined;
+        do {
+            const r = (await this.call({
+                method: "GET",
+                url: addQuery(`${BASE}/users/me/calendarList`, { pageToken }),
+            })) as { items?: CalendarListEntry[]; nextPageToken?: string };
+            items.push(...(r.items ?? []));
+            pageToken = r.nextPageToken;
+        } while (pageToken);
+        return items;
     }
 
     async listEvents(

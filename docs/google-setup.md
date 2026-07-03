@@ -199,15 +199,15 @@ To get clean event/task notes with one click, pair this with the **Templater** c
 
 Run **Validate setup** first. It checks the local fields and, once connected, checks the chosen calendar and task list.
 
-| Error or symptom | What it usually means | Fix |
-| --- | --- | --- |
-| `Error 400: redirect_uri_mismatch` | The bridge URL in Google's OAuth client is not an exact match for the plugin setting. | Copy the same bridge URL into Google Cloud and Obsidian. Check `https://`, path, and trailing slash. Confirm the OAuth client type is **Web application**. |
-| `access_denied` or “app has not completed verification” | Your app is in Testing mode and your account is not allowed to log in. | Add your Google address under **Audience → Test users**. |
-| `invalid_client` | Wrong Client ID/secret, or values copied from a different OAuth client. | Reopen **Google Auth Platform → Clients** and copy the Client ID and secret from the same **Web application** client. |
-| `invalid_grant` | The sign-in attempt expired, was already used, or the session was revoked. | Run **Connect to Google** again. |
-| Obsidian does not reopen after approval | The bridge loaded, but the `obsidian://google-sync` deep link did not open Obsidian. | Open your bridge URL directly to confirm it loads. Make sure Obsidian is installed and allowed to open `obsidian://` links, especially on iOS. |
-| Validate setup cannot find the calendar or task list | The selected calendar/list ID is not visible to this Google account. | Start with `primary` and `@default`; after a basic sync works, use the dropdown pickers in settings. |
-| Event times look wrong | The timezone is missing or incorrect. | Add a `timezone` field to the note, or set **Default timezone** correctly in settings. |
+| Error or symptom                                        | What it usually means                                                                 | Fix                                                                                                                                                        |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Error 400: redirect_uri_mismatch`                      | The bridge URL in Google's OAuth client is not an exact match for the plugin setting. | Copy the same bridge URL into Google Cloud and Obsidian. Check `https://`, path, and trailing slash. Confirm the OAuth client type is **Web application**. |
+| `access_denied` or “app has not completed verification” | Your app is in Testing mode and your account is not allowed to log in.                | Add your Google address under **Audience → Test users**.                                                                                                   |
+| `invalid_client`                                        | Wrong Client ID/secret, or values copied from a different OAuth client.               | Reopen **Google Auth Platform → Clients** and copy the Client ID and secret from the same **Web application** client.                                      |
+| `invalid_grant`                                         | The sign-in attempt expired, was already used, or the session was revoked.            | Run **Connect to Google** again.                                                                                                                           |
+| Obsidian does not reopen after approval                 | The bridge loaded, but the `obsidian://google-sync` deep link did not open Obsidian.  | Open your bridge URL directly to confirm it loads. Make sure Obsidian is installed and allowed to open `obsidian://` links, especially on iOS.             |
+| Validate setup cannot find the calendar or task list    | The selected calendar/list ID is not visible to this Google account.                  | Start with `primary` and `@default`; after a basic sync works, use the dropdown pickers in settings.                                                       |
+| Event times look wrong                                  | The timezone is missing or incorrect.                                                 | Add a `timezone` field to the note, or set **Default timezone** correctly in settings.                                                                     |
 
 ### Screenshot checklist for this guide
 

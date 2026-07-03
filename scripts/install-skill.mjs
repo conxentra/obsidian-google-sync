@@ -32,12 +32,32 @@ const BUNDLES = [
 function knownAgents() {
     const home = os.homedir();
     return [
-        { name: "Claude Code", home: path.join(home, ".claude"), skills: path.join(home, ".claude", "skills") },
-        { name: "Codex", home: path.join(home, ".codex"), skills: path.join(home, ".codex", "skills") },
-        { name: "OpenClaw", home: path.join(home, ".openclaw"), skills: path.join(home, ".openclaw", "skills") },
-        { name: "Hermes", home: path.join(home, ".hermes"), skills: path.join(home, ".hermes", "skills") },
+        {
+            name: "Claude Code",
+            home: path.join(home, ".claude"),
+            skills: path.join(home, ".claude", "skills"),
+        },
+        {
+            name: "Codex",
+            home: path.join(home, ".codex"),
+            skills: path.join(home, ".codex", "skills"),
+        },
+        {
+            name: "OpenClaw",
+            home: path.join(home, ".openclaw"),
+            skills: path.join(home, ".openclaw", "skills"),
+        },
+        {
+            name: "Hermes",
+            home: path.join(home, ".hermes"),
+            skills: path.join(home, ".hermes", "skills"),
+        },
         // Cross-agent open standard (https://agentskills.io): personal variant.
-        { name: "Agent Skills standard", home: path.join(home, ".agents"), skills: path.join(home, ".agents", "skills") },
+        {
+            name: "Agent Skills standard",
+            home: path.join(home, ".agents"),
+            skills: path.join(home, ".agents", "skills"),
+        },
     ];
 }
 

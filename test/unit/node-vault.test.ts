@@ -58,7 +58,10 @@ describe("NodeVaultPort", () => {
         await fs.writeFile(nodePath.join(dir, "events", ".hidden", "x.md"), "nope");
 
         const refs = await port.listMarkdown(["events", "missing-folder"]);
-        expect(refs.map((r) => r.path).sort()).to.deep.equal(["events/a.md", "events/archive/b.md"]);
+        expect(refs.map((r) => r.path).sort()).to.deep.equal([
+            "events/a.md",
+            "events/archive/b.md",
+        ]);
         expect(refs.find((r) => r.path === "events/a.md")?.basename).to.equal("a");
     });
 

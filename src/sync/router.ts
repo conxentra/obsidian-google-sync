@@ -198,7 +198,11 @@ export class SyncRouter {
         const veto = vetPatch(patch, baseline, kind);
         if (!veto.ok) {
             const msg = `Google sync: ${noteName(path)}: ${veto.reason} — not pushed. Re-import to restore the note from Google.`;
-            options.collectVetoed?.push({ path, changedKeys: Object.keys(patch), veto: veto.reason });
+            options.collectVetoed?.push({
+                path,
+                changedKeys: Object.keys(patch),
+                veto: veto.reason,
+            });
             this.notify(msg);
             return null;
         }

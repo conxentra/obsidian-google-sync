@@ -1,6 +1,6 @@
 import { GoogleTask } from "../types";
 import { HttpFn, RetryOptions } from "./http";
-import { ApiCall, TokenProvider, apiCall } from "./api";
+import { ApiCall, TokenProvider, addQuery, apiCall } from "./api";
 
 const BASE = "https://tasks.googleapis.com/tasks/v1";
 const enc = encodeURIComponent;
@@ -12,17 +12,6 @@ export interface TaskListEntry {
 
 export interface ListTasksOptions {
     pageSize?: number;
-}
-
-function addQuery(
-    url: string,
-    params: Record<string, string | number | boolean | undefined>,
-): string {
-    const query = Object.entries(params)
-        .filter((entry): entry is [string, string | number | boolean] => entry[1] !== undefined)
-        .map(([key, value]) => `${enc(key)}=${enc(String(value))}`)
-        .join("&");
-    return query ? `${url}?${query}` : url;
 }
 
 /** Thin Google Tasks v1 client over an injectable transport. */
@@ -38,10 +27,17 @@ export class GoogleTasksClient {
     }
 
     async listTaskLists(): Promise<TaskListEntry[]> {
-        const r = (await this.call({ method: "GET", url: `${BASE}/users/@me/lists` })) as {
-            items?: TaskListEntry[];
-        };
-        return r.items ?? [];
+        const items: TaskListEntry[] = [];
+        let pageToken: string | undefined;
+        do {
+            const r = (await this.call({
+                method: "GET",
+                url: addQuery(`${BASE}/users/@me/lists`, { pageToken }),
+            })) as { items?: TaskListEntry[]; nextPageToken?: string };
+            items.push(...(r.items ?? []));
+            pageToken = r.nextPageToken;
+        } while (pageToken);
+        return items;
     }
 
     async listTasks(taskListId: string, options: ListTasksOptions = {}): Promise<GoogleTask[]> {

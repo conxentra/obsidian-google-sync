@@ -23,3 +23,13 @@ jobs:
             - run: npm ci
             - run: npm run build
             - run: npm run lint
+            - run: npm run format:check
+            # The plugin bundle must stay free of Node/headless code (mobile support).
+            - run: node scripts/check-runtime-bundle.mjs
+            # Version metadata (manifest/package/versions.json) must stay in lockstep.
+            - run: npm run check:release-metadata
+              env:
+                  ALLOW_EXISTING_RELEASE_TAG: "1"
+            # The headless bundle must keep building alongside the plugin.
+            - run: npm run build:headless
+            - run: bash scripts/smoke-headless.sh

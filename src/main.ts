@@ -535,7 +535,10 @@ export default class GoogleSyncPlugin extends Plugin {
         );
         this.registerEvent(
             this.app.vault.on("rename", (f) => {
-                if (f instanceof TFile) void this.safeRename(f);
+                // Same gates as create/modify: the master push toggle and the
+                // echo-suppression window both apply to renames too.
+                if (f instanceof TFile && this.settings.syncOnModify && !this.isSuppressed(f.path))
+                    void this.safeRename(f);
             }),
         );
     }

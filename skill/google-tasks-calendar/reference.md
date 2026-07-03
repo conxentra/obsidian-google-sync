@@ -7,38 +7,38 @@ or [Tasks resource](https://developers.google.com/tasks/reference/rest/v1/tasks)
 
 ## Event fields
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `title` | string | Required on create. Maps to `summary`. |
-| `date` | ISO datetime/date | Start. Required on create. `2026-06-18T10:00` or `2026-06-18` with `allDay`. |
-| `end` | ISO datetime/date | Optional; all-day events default to the next day. |
-| `allDay` | boolean | Use date-only `date`/`end`. |
-| `timezone` | IANA string | e.g. `Pacific/Auckland`; defaults to the config timezone. |
-| `location` | string | Free text. |
-| `description` | string | Supports basic HTML in Google UIs. |
-| `status` | string | `confirmed` \| `tentative` \| `cancelled` (cancelling via update is the closest thing to delete). |
-| `visibility` | string | `default` \| `public` \| `private` \| `confidential`. |
-| `transparency` | string | `opaque` (busy) \| `transparent` (free). |
-| `color` | string | Google colorId `"1"`–`"11"`. |
-| `eventType` | string | Free-form label (stored in the event's private extended properties; round-trips to vault notes). |
-| `attendees` | object or array | Simple: `{ "required": [emails], "optional": [emails] }`. Detailed: array of `{ email, displayName?, optional?, responseStatus?, comment?, additionalGuests? }`. |
-| `recurrence` | string or string[] | RRULE/EXDATE/RDATE lines, e.g. `"RRULE:FREQ=DAILY;COUNT=5"`. |
-| `conferencing` | boolean | `true` requests a Google Meet link; read it back from `hangoutLink` in the response. |
-| `reminders` | object | `{ "useDefault": bool, "overrides": [{ "method": "popup"\|"email", "minutes": n }] }`. |
-| `guestsCanInviteOthers` / `guestsCanModify` / `guestsCanSeeOtherGuests` | boolean | Guest permissions. |
-| `attachments` | array | `{ fileUrl, title?, mimeType? }` — Google Drive URLs only. |
-| `source` | object | `{ title?, url? }` back-link shown in Calendar. |
+| Field                                                                   | Type               | Notes                                                                                                                                                            |
+| ----------------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`                                                                 | string             | Required on create. Maps to `summary`.                                                                                                                           |
+| `date`                                                                  | ISO datetime/date  | Start. Required on create. `2026-06-18T10:00` or `2026-06-18` with `allDay`.                                                                                     |
+| `end`                                                                   | ISO datetime/date  | Optional; all-day events default to the next day.                                                                                                                |
+| `allDay`                                                                | boolean            | Use date-only `date`/`end`.                                                                                                                                      |
+| `timezone`                                                              | IANA string        | e.g. `Pacific/Auckland`; defaults to the config timezone.                                                                                                        |
+| `location`                                                              | string             | Free text.                                                                                                                                                       |
+| `description`                                                           | string             | Supports basic HTML in Google UIs.                                                                                                                               |
+| `status`                                                                | string             | `confirmed` \| `tentative` \| `cancelled` (cancelling via update is the closest thing to delete).                                                                |
+| `visibility`                                                            | string             | `default` \| `public` \| `private` \| `confidential`.                                                                                                            |
+| `transparency`                                                          | string             | `opaque` (busy) \| `transparent` (free).                                                                                                                         |
+| `color`                                                                 | string             | Google colorId `"1"`–`"11"`.                                                                                                                                     |
+| `eventType`                                                             | string             | Free-form label (stored in the event's private extended properties; round-trips to vault notes).                                                                 |
+| `attendees`                                                             | object or array    | Simple: `{ "required": [emails], "optional": [emails] }`. Detailed: array of `{ email, displayName?, optional?, responseStatus?, comment?, additionalGuests? }`. |
+| `recurrence`                                                            | string or string[] | RRULE/EXDATE/RDATE lines, e.g. `"RRULE:FREQ=DAILY;COUNT=5"`.                                                                                                     |
+| `conferencing`                                                          | boolean            | `true` requests a Google Meet link; read it back from `hangoutLink` in the response.                                                                             |
+| `reminders`                                                             | object             | `{ "useDefault": bool, "overrides": [{ "method": "popup"\|"email", "minutes": n }] }`.                                                                           |
+| `guestsCanInviteOthers` / `guestsCanModify` / `guestsCanSeeOtherGuests` | boolean            | Guest permissions.                                                                                                                                               |
+| `attachments`                                                           | array              | `{ fileUrl, title?, mimeType? }` — Google Drive URLs only.                                                                                                       |
+| `source`                                                                | object             | `{ title?, url? }` back-link shown in Calendar.                                                                                                                  |
 
 Flag, not field: `--send-updates all|externalOnly|none` controls invitation/update emails.
 
 ## Task fields
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `title` | string | Required on create. |
-| `notes` | string | The task's details/description. |
-| `due` | ISO date | Google honors the date part only. |
-| `completed` | boolean | Or set `status` directly (`needsAction` \| `completed`). |
+| Field       | Type     | Notes                                                    |
+| ----------- | -------- | -------------------------------------------------------- |
+| `title`     | string   | Required on create.                                      |
+| `notes`     | string   | The task's details/description.                          |
+| `due`       | ISO date | Google honors the date part only.                        |
+| `completed` | boolean  | Or set `status` directly (`needsAction` \| `completed`). |
 
 Nesting/ordering travel via flags (`--parent`, `--previous`), not the body — that is how
 the Google API works.
